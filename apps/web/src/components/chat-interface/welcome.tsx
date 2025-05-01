@@ -3,7 +3,7 @@ import { ThreadPrimitive, useThreadRuntime } from "@assistant-ui/react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { FC, useMemo } from "react";
 import { TighterText } from "../ui/header";
-import { NotebookPen } from "lucide-react";
+import { NotebookPen, StickyNote } from "lucide-react";
 import { ProgrammingLanguagesDropdown } from "../ui/programming-lang-dropdown";
 import { Button } from "../ui/button";
 
@@ -43,7 +43,7 @@ function getRandomPrompts(prompts: string[], count: number = 4): string[] {
 
 interface QuickStartButtonsProps {
   handleQuickStart: (
-    type: "text" | "code",
+    type: "text" | "code" | "board",
     language?: ProgrammingLanguageOptions
   ) => void;
   composer: React.ReactNode;
@@ -110,6 +110,14 @@ const QuickStartButtons = (props: QuickStartButtonsProps) => {
             New Markdown
             <NotebookPen />
           </Button>
+          <Button
+            variant="outline"
+            className="text-gray-500 hover:text-gray-700 transition-colors ease-in rounded-2xl flex items-center justify-center gap-2 w-[250px] h-[64px]"
+            onClick={() => props.handleQuickStart("board")}
+          >
+            New Board
+            <StickyNote />
+          </Button>
           <ProgrammingLanguagesDropdown handleSubmit={handleLanguageSubmit} />
         </div>
       </div>
@@ -124,7 +132,7 @@ const QuickStartButtons = (props: QuickStartButtonsProps) => {
 
 interface ThreadWelcomeProps {
   handleQuickStart: (
-    type: "text" | "code",
+    type: "text" | "code" | "board",
     language?: ProgrammingLanguageOptions
   ) => void;
   composer: React.ReactNode;

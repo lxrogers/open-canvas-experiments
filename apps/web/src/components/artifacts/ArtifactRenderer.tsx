@@ -13,7 +13,7 @@ import { v4 as uuidv4 } from "uuid";
 import { ActionsToolbar, CodeToolBar } from "./actions_toolbar";
 import { CodeRenderer } from "./CodeRenderer";
 import { TextRenderer } from "./TextRenderer";
-import { BoardRenderer } from "./BoardRenderer";
+import { BoardRenderer, OnNoteUpdate } from "./BoardRenderer";
 import { CustomQuickActions } from "./actions_toolbar/custom";
 import { getArtifactContent } from "@opencanvas/shared/utils/artifacts";
 import { ArtifactLoading } from "./ArtifactLoading";
@@ -47,6 +47,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
     isArtifactSaved,
     artifactUpdateFailed,
     setSelectedArtifact,
+    setArtifact,
     setMessages,
     streamMessage,
     setSelectedBlocks,
@@ -295,6 +296,67 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
         | undefined)
     : undefined;
 
+  // --- Handler for updating board notes --- 
+  const handleBoardNoteUpdate: OnNoteUpdate = useCallback(
+    (updatedIndex, updatedNoteData) => {
+      if (!artifact || !currentArtifactContent || currentArtifactContent.type !== 'board') {
+        console.error("Cannot update note: Invalid artifact state.");
+        return;
+      }
+
+      try {
+        // 1. Parse existing NDJSON
+        const lines = currentArtifactContent.board.trim().split('\n');
+        const notes = lines.map(line => JSON.parse(line));
+        
+        // 2. Update the specific note
+        if (updatedIndex >= 0 && updatedIndex < notes.length) {
+          notes[updatedIndex] = { 
+            ...notes[updatedIndex], 
+            x: updatedNoteData.x, 
+            y: updatedNoteData.y 
+          };
+        } else {
+           console.error(`Invalid index ${updatedIndex} provided for note update.`);
+           return;
+        }
+
+        // 3. Re-serialize to NDJSON
+        const updatedBoardString = notes.map(note => JSON.stringify(note)).join('\n');
+
+        // 4. Update artifact state
+        const updatedBoardContent: ArtifactBoardV3 = {
+          ...currentArtifactContent,
+          board: updatedBoardString,
+        };
+
+        // Create new contents array with the updated board content
+        const newContents = artifact.contents.map(content => 
+          content.index === currentArtifactContent.index ? updatedBoardContent : content
+        );
+
+        // Set the new artifact state
+        setArtifact({
+          ...artifact,
+          contents: newContents,
+          // Keep currentIndex the same, as we are just updating content
+        });
+
+      } catch (error) {
+        console.error("Failed to update board note:", error);
+      }
+    },
+    [artifact, currentArtifactContent, setArtifact] // Dependencies
+  );
+
+  // --- Debug Logging Start ---
+  console.log("[ArtifactRenderer] Received artifact:", artifact);
+  console.log(
+    "[ArtifactRenderer] Determined currentArtifactContent:",
+    currentArtifactContent
+  );
+  // --- Debug Logging End ---
+
   if (!artifact && isStreaming) {
     return <ArtifactLoading />;
   }
@@ -358,7 +420,13 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
                 isHovering={isHoveringOverArtifact}
               />
             ) : null}
-            {currentArtifactContent.type === "board" ? <BoardRenderer /> : null}
+            {currentArtifactContent.type === "board" ? (
+              <BoardRenderer 
+                boardContent={currentArtifactContent.board} 
+                onNoteUpdate={handleBoardNoteUpdate}
+                isStreaming={isStreaming}
+              />
+            ) : null}
           </div>
           <div
             ref={highlightLayerRef}

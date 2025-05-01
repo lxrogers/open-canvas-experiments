@@ -44,12 +44,15 @@ export const rewriteArtifact = async (
   const isNewType = artifactType !== currentArtifactContent.type;
 
   const artifactContent = getArtifactContentText(currentArtifactContent);
+  console.log("[Rewrite Artifact] Artifact content:", currentArtifactContent);
+  console.log("[Rewrite Artifact] Extracted artifact content:\n", artifactContent);
 
   const formattedPrompt = buildPrompt({
     artifactContent,
     memoriesAsString,
     isNewType,
     artifactMetaToolCall,
+    targetArtifactType: artifactType,
   });
 
   const userSystemPrompt = optionallyGetSystemPromptFromConfig(config);

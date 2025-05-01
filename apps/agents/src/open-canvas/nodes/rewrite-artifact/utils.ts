@@ -11,6 +11,7 @@ import {
 import {
   OPTIONALLY_UPDATE_META_PROMPT,
   UPDATE_ENTIRE_ARTIFACT_PROMPT,
+  BOARD_REWRITE_DETAILS_PROMPT,
 } from "../../prompts.js";
 import { OpenCanvasGraphAnnotation } from "../../state.js";
 import { z } from "zod";
@@ -55,6 +56,7 @@ interface BuildPromptArgs {
   memoriesAsString: string;
   isNewType: boolean;
   artifactMetaToolCall: z.infer<typeof OPTIONALLY_UPDATE_ARTIFACT_META_SCHEMA>;
+  targetArtifactType: string;
 }
 
 export const buildPrompt = ({
@@ -62,15 +64,22 @@ export const buildPrompt = ({
   memoriesAsString,
   isNewType,
   artifactMetaToolCall,
+  targetArtifactType,
 }: BuildPromptArgs) => {
   const metaPrompt = isNewType ? buildMetaPrompt(artifactMetaToolCall) : "";
 
-  return UPDATE_ENTIRE_ARTIFACT_PROMPT.replace(
+  let basePrompt = UPDATE_ENTIRE_ARTIFACT_PROMPT.replace(
     "{artifactContent}",
     artifactContent
   )
     .replace("{reflections}", memoriesAsString)
     .replace("{updateMetaPrompt}", metaPrompt);
+
+  if (targetArtifactType === "board") {
+    basePrompt += `\n\n${BOARD_REWRITE_DETAILS_PROMPT}`;
+  }
+
+  return basePrompt;
 };
 
 interface CreateNewArtifactContentArgs {

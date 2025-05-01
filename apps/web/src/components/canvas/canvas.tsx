@@ -16,6 +16,7 @@ import {
   ArtifactV3,
   CustomModelConfig,
   ProgrammingLanguageOptions,
+  ArtifactBoardV3,
 } from "@opencanvas/shared/types";
 import React, { useEffect, useState } from "react";
 import { ContentComposerChatInterface } from "./content-composer";
@@ -55,7 +56,7 @@ export function CanvasComponent() {
   }, [chatCollapsedSearchParam]);
 
   const handleQuickStart = (
-    type: "text" | "code",
+    type: "text" | "code" | "board",
     language?: ProgrammingLanguageOptions
   ) => {
     if (type === "code" && !language) {
@@ -68,7 +69,7 @@ export function CanvasComponent() {
     }
     setChatStarted(true);
 
-    let artifactContent: ArtifactCodeV3 | ArtifactMarkdownV3;
+    let artifactContent: ArtifactCodeV3 | ArtifactMarkdownV3 | ArtifactBoardV3;
     if (type === "code" && language) {
       artifactContent = {
         index: 1,
@@ -76,6 +77,13 @@ export function CanvasComponent() {
         title: `Quick start ${type}`,
         code: getLanguageTemplate(language),
         language,
+      };
+    } else if (type === "board") {
+      artifactContent = {
+        index: 1,
+        type: "board",
+        title: `Quick start ${type}`,
+        board: "",
       };
     } else {
       artifactContent = {

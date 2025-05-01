@@ -39,7 +39,7 @@ export interface ContentComposerChatInterfaceProps {
   setChatStarted: React.Dispatch<React.SetStateAction<boolean>>;
   hasChatStarted: boolean;
   handleQuickStart: (
-    type: "text" | "code",
+    type: "text" | "code" | "board",
     language?: ProgrammingLanguageOptions
   ) => void;
   chatCollapsed: boolean;

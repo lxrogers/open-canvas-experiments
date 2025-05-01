@@ -3,7 +3,7 @@ import { z } from "zod";
 
 export const ARTIFACT_TOOL_SCHEMA = z.object({
   type: z
-    .enum(["code", "text"])
+    .enum(["code", "text", "board"])
     .describe("The content type of the artifact generated."),
   language: z
     .enum(

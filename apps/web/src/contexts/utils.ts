@@ -85,6 +85,13 @@ export const createNewGeneratedArtifactFromTool = (
       title: artifactTool.title || "",
       fullMarkdown: artifactTool.artifact || "",
     };
+  } else if (artifactTool.type === "board") {
+    return {
+      index: 1,
+      type: "board",
+      title: artifactTool.title || "",
+      board: artifactTool.artifact || "",
+    };
   } else {
     if (!artifactTool.language) {
       console.error("Received new code artifact without language");
@@ -275,6 +282,16 @@ export const updateRewrittenArtifact = ({
           code: newArtifactContent,
         },
       ];
+    } else if (rewriteArtifactMeta.type === "board") {
+      artifactContents = [
+        ...basePrevArtifact.contents,
+        {
+          index: currentIndex,
+          type: "board",
+          title: rewriteArtifactMeta?.title ?? prevCurrentContent?.title ?? "",
+          board: newArtifactContent,
+        },
+      ];
     } else {
       artifactContents = [
         ...basePrevArtifact.contents,
@@ -296,6 +313,16 @@ export const updateRewrittenArtifact = ({
           };
         }
         return { ...c }; // Create new reference for unchanged items too
+      });
+    } else if (rewriteArtifactMeta.type === "board") {
+      artifactContents = basePrevArtifact.contents.map((c) => {
+        if (c.index === currentIndex) {
+          return {
+            ...c,
+            board: newArtifactContent,
+          };
+        }
+        return { ...c };
       });
     } else {
       artifactContents = basePrevArtifact.contents.map((c) => {

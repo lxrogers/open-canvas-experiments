@@ -36,7 +36,7 @@ export interface ThreadProps {
   userId: string | undefined;
   hasChatStarted: boolean;
   handleQuickStart: (
-    type: "text" | "code",
+    type: "text" | "code" | "board",
     language?: ProgrammingLanguageOptions
   ) => void;
   setChatStarted: Dispatch<SetStateAction<boolean>>;

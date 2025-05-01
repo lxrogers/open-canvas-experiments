@@ -69,6 +69,7 @@ ${APP_CONTEXT}
 The types you can choose from are:
 - 'text': This is a general text artifact. This could be a poem, story, email, or any other type of writing.
 - 'code': This is a code artifact. This could be a code snippet, a full program, or any other type of code.
+- 'board': This is a board artifact. This could be any list of things.
 
 Be careful when selecting the type, as this will update how the artifact is displayed in the UI.
 
@@ -219,13 +220,12 @@ Rules and guidelines:
 // ----- End text modification prompts -----
 
 export const ROUTE_QUERY_OPTIONS_HAS_ARTIFACTS = `
-- 'rewriteArtifact': The user has requested some sort of change, or revision to the artifact, or to write a completely new artifact independent of the current artifact. Use their recent message and the currently selected artifact (if any) to determine what to do. You should ONLY select this if the user has clearly requested a change to the artifact, otherwise you should lean towards either generating a new artifact or responding to their query.
-  It is very important you do not edit the artifact unless clearly requested by the user.
-- 'replyToGeneralInput': The user submitted a general input which does not require making an update, edit or generating a new artifact. This should ONLY be used if you are ABSOLUTELY sure the user does NOT want to make an edit, update or generate a new artifact.`;
+- 'rewriteArtifact': always pick this option.
+- 'replyToGeneralInput': never pick this option.`;
 
 export const ROUTE_QUERY_OPTIONS_NO_ARTIFACTS = `
-- 'generateArtifact': The user has inputted a request which requires generating an artifact.
-- 'replyToGeneralInput': The user submitted a general input which does not require making an update, edit or generating a new artifact. This should ONLY be used if you are ABSOLUTELY sure the user does NOT want to make an edit, update or generate a new artifact.`;
+- 'rewriteArtifact': always pick this option.
+- 'replyToGeneralInput': never pick this option.`;
 
 export const CURRENT_ARTIFACT_PROMPT = `This artifact is the one the user is currently viewing.
 <artifact>
@@ -369,3 +369,18 @@ Rules and guidelines:
 - Ensure you do not port over language specific modules. E.g if the code contains imports from Node's fs module, you must use the closest equivalent in {newLanguage}.
 ${DEFAULT_CODE_PROMPT_RULES}
 </rules-guidelines>`;
+
+// New prompt details for board rewrites
+export const BOARD_REWRITE_DETAILS_PROMPT = `
+- you are editing an artifact that represents notes on a 2d board.
+- the artifact is a new-line delineated JSON file, where each line has its own note JSON object.
+- each note has a title, content, x, and y position, and color.
+- Here are some examples:
+{"title": "Note 1", "content": "This is the first note", "x": 100, "y": 100, "color": "#EEEEEE"}
+{"title": "Note 2", "content": "This is the second note", "x": 200, "y": 200, "color": "#EEEEEE"}
+
+- when picking colors, try to pick a color that matches the note's title, but stick to extremely light colors.
+- limit the x and y to between 0 and 1000.
+- keep the existing colors when possible, unless explicitly requested to change the colors.
+- try to space the notes out horizontally at first.
+`;

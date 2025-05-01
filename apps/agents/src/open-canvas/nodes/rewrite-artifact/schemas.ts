@@ -4,7 +4,7 @@ import { z } from "zod";
 export const OPTIONALLY_UPDATE_ARTIFACT_META_SCHEMA = z
   .object({
     type: z
-      .enum(["text", "code"])
+      .enum(["text", "code", "board"])
       .describe("The type of the artifact content."),
     title: z
       .string()

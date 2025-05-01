@@ -70,7 +70,9 @@ export const getArtifactContent = (
 export const getArtifactContentText = (
   content: ArtifactCodeV3 | ArtifactMarkdownV3 | ArtifactBoardV3 | undefined
 ): string => {
+  console.log("[getArtifactContentText] Content:", content);
   if (!content) {
+    console.error("No content found when getting artifact content text");
     return "";
   }
   if (isArtifactMarkdownContent(content)) {
@@ -80,7 +82,7 @@ export const getArtifactContentText = (
     return content.code;
   }
   if (isArtifactBoardContent(content)) {
-    return ""; // Board content is visual, no text representation
+    return content.board;
   }
-  return "";
+  return "bacon";
 };

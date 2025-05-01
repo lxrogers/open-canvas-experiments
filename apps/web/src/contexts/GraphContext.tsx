@@ -886,7 +886,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
               setFirstTokenReceived(true);
               setArtifact((prev) => {
                 if (!prev) {
-                  throw new Error("No artifact found when updating markdown");
+                  console.error("No artifact found when updating markdown");
+                  return prev;
+                  //throw new Error("No artifact found when updating markdown");
                 }
 
                 let content = fullNewArtifactContent;
@@ -991,7 +993,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
               setFirstTokenReceived(true);
               setArtifact((prev) => {
                 if (!prev) {
-                  throw new Error("No artifact found when updating markdown");
+                  console.error("No artifact found when updating markdown");
+                  return prev;
+                  //throw new Error("No artifact found when updating markdown");
                 }
                 return updateHighlightedMarkdown(
                   prev,
