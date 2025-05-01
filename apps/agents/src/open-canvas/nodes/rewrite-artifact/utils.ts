@@ -3,6 +3,7 @@ import {
   isArtifactCodeContent,
 } from "@opencanvas/shared/utils/artifacts";
 import {
+  ArtifactBoardV3,
   ArtifactCodeV3,
   ArtifactMarkdownV3,
   ProgrammingLanguageOptions,
@@ -75,14 +76,14 @@ export const buildPrompt = ({
 interface CreateNewArtifactContentArgs {
   artifactType: string;
   state: typeof OpenCanvasGraphAnnotation.State;
-  currentArtifactContent: ArtifactCodeV3 | ArtifactMarkdownV3;
+  currentArtifactContent: ArtifactCodeV3 | ArtifactMarkdownV3 | ArtifactBoardV3;
   artifactMetaToolCall: z.infer<typeof OPTIONALLY_UPDATE_ARTIFACT_META_SCHEMA>;
   newContent: string;
 }
 
 const getLanguage = (
   artifactMetaToolCall: z.infer<typeof OPTIONALLY_UPDATE_ARTIFACT_META_SCHEMA>,
-  currentArtifactContent: ArtifactCodeV3 | ArtifactMarkdownV3 // Replace 'any' with proper type
+  currentArtifactContent: ArtifactCodeV3 | ArtifactMarkdownV3 | ArtifactBoardV3
 ) =>
   artifactMetaToolCall?.language ||
   (isArtifactCodeContent(currentArtifactContent)
@@ -95,7 +96,7 @@ export const createNewArtifactContent = ({
   currentArtifactContent,
   artifactMetaToolCall,
   newContent,
-}: CreateNewArtifactContentArgs): ArtifactCodeV3 | ArtifactMarkdownV3 => {
+}: CreateNewArtifactContentArgs): ArtifactCodeV3 | ArtifactMarkdownV3 | ArtifactBoardV3 => {
   const baseContent = {
     index: state.artifact.contents.length + 1,
     title: artifactMetaToolCall?.title || currentArtifactContent.title,
@@ -111,8 +112,15 @@ export const createNewArtifactContent = ({
       ) as ProgrammingLanguageOptions,
       code: newContent,
     };
-  }
+    }
 
+  if (artifactType === "board") {
+    return {
+      ...baseContent,
+      type: "board",
+      board: newContent,
+    };
+  }
   return {
     ...baseContent,
     type: "text",

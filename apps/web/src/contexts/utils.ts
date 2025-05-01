@@ -1,6 +1,7 @@
 import { cleanContent } from "@/lib/normalize_string";
 import {
   Artifact,
+  ArtifactBoardV3,
   ArtifactCodeV3,
   ArtifactMarkdownV3,
   ArtifactToolResponse,
@@ -72,7 +73,7 @@ export const replaceOrInsertMessageChunk = (
 
 export const createNewGeneratedArtifactFromTool = (
   artifactTool: ArtifactToolResponse
-): ArtifactMarkdownV3 | ArtifactCodeV3 | undefined => {
+): ArtifactMarkdownV3 | ArtifactCodeV3 | ArtifactBoardV3 | undefined => {
   if (!artifactTool.type) {
     console.error("Received new artifact without type");
     return;
@@ -139,7 +140,7 @@ export const updateHighlightedMarkdown = (
     isFirstUpdate
   );
 
-  let newContents: (ArtifactCodeV3 | ArtifactMarkdownV3)[];
+  let newContents: (ArtifactCodeV3 | ArtifactMarkdownV3 | ArtifactBoardV3)[];
 
   if (isFirstUpdate) {
     const newMarkdownContent: ArtifactMarkdownV3 = {
@@ -194,7 +195,7 @@ export const updateHighlightedCode = (
     isFirstUpdate
   );
 
-  let newContents: (ArtifactCodeV3 | ArtifactMarkdownV3)[];
+  let newContents: (ArtifactCodeV3 | ArtifactMarkdownV3 | ArtifactBoardV3)[];
 
   if (isFirstUpdate) {
     const newCodeContent: ArtifactCodeV3 = {
@@ -233,7 +234,7 @@ interface UpdateRewrittenArtifactArgs {
   prevArtifact: ArtifactV3;
   newArtifactContent: string;
   rewriteArtifactMeta: RewriteArtifactMetaToolResponse;
-  prevCurrentContent?: ArtifactMarkdownV3 | ArtifactCodeV3;
+  prevCurrentContent?: ArtifactMarkdownV3 | ArtifactCodeV3 | ArtifactBoardV3;
   newArtifactIndex: number;
   isFirstUpdate: boolean;
   artifactLanguage: string;
@@ -260,7 +261,7 @@ export const updateRewrittenArtifact = ({
     isFirstUpdate
   );
 
-  let artifactContents: (ArtifactMarkdownV3 | ArtifactCodeV3)[];
+  let artifactContents: (ArtifactMarkdownV3 | ArtifactCodeV3 | ArtifactBoardV3)[];
 
   if (isFirstUpdate) {
     if (rewriteArtifactMeta.type === "code") {

@@ -1,5 +1,6 @@
 import {
   Artifact,
+  ArtifactBoardV3,
   ArtifactCodeV3,
   ArtifactMarkdownV3,
   ArtifactV3,
@@ -27,6 +28,19 @@ export const isArtifactMarkdownContent = (
   );
 };
 
+
+
+export const isArtifactBoardContent = (
+  content: unknown
+): content is ArtifactBoardV3 => {
+  return !!(
+    typeof content === "object" &&
+    content &&
+    "type" in content &&
+    content.type === "board"
+  );
+};
+
 export const isDeprecatedArtifactType = (
   artifact: unknown
 ): artifact is Artifact => {
@@ -40,9 +54,9 @@ export const isDeprecatedArtifactType = (
 
 export const getArtifactContent = (
   artifact: ArtifactV3
-): ArtifactCodeV3 | ArtifactMarkdownV3 => {
+): ArtifactCodeV3 | ArtifactMarkdownV3 | ArtifactBoardV3 | undefined => {
   if (!artifact) {
-    throw new Error("No artifact found.");
+    return undefined;
   }
   const currentContent = artifact.contents.find(
     (a) => a.index === artifact.currentIndex
@@ -51,4 +65,22 @@ export const getArtifactContent = (
     return artifact.contents[artifact.contents.length - 1];
   }
   return currentContent;
+};
+
+export const getArtifactContentText = (
+  content: ArtifactCodeV3 | ArtifactMarkdownV3 | ArtifactBoardV3 | undefined
+): string => {
+  if (!content) {
+    return "";
+  }
+  if (isArtifactMarkdownContent(content)) {
+    return content.fullMarkdown;
+  }
+  if (isArtifactCodeContent(content)) {
+    return content.code;
+  }
+  if (isArtifactBoardContent(content)) {
+    return ""; // Board content is visual, no text representation
+  }
+  return "";
 };

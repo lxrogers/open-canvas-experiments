@@ -33,7 +33,7 @@ export interface CustomModelConfig {
 
 export type ArtifactLengthOptions = "shortest" | "short" | "long" | "longest";
 
-export type ArtifactType = "code" | "text";
+export type ArtifactType = "code" | "text" | "board";
 
 export interface ArtifactContent {
   index: number;
@@ -64,6 +64,11 @@ export type RewriteArtifactMetaToolResponse =
     }
   | {
       type: "code";
+      title: string;
+      language: ProgrammingLanguageOptions;
+    }
+  | {
+      type: "board";
       title: string;
       language: ProgrammingLanguageOptions;
     };
@@ -118,9 +123,16 @@ export interface ArtifactCodeV3 {
   code: string;
 }
 
+export interface ArtifactBoardV3 {
+  index: number;
+  type: "board";
+  title: string;
+  board: string;
+}
+
 export interface ArtifactV3 {
   currentIndex: number;
-  contents: (ArtifactMarkdownV3 | ArtifactCodeV3)[];
+  contents: (ArtifactMarkdownV3 | ArtifactCodeV3 | ArtifactBoardV3)[];
 }
 
 export interface TextHighlight {

@@ -2,7 +2,7 @@ import { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { getModelFromConfig } from "../../utils.js";
 import {
   getArtifactContent,
-  isArtifactMarkdownContent,
+  getArtifactContentText,
 } from "@opencanvas/shared/utils/artifacts";
 import { Reflections } from "@opencanvas/shared/types";
 import { ensureStoreInConfig, formatReflections } from "../../utils.js";
@@ -43,11 +43,7 @@ export const generateFollowup = async (
     ? getArtifactContent(state.artifact)
     : undefined;
 
-  const artifactContent = currentArtifactContent
-    ? isArtifactMarkdownContent(currentArtifactContent)
-      ? currentArtifactContent.fullMarkdown
-      : currentArtifactContent.code
-    : undefined;
+  const artifactContent = getArtifactContentText(currentArtifactContent);
 
   const formattedPrompt = FOLLOWUP_ARTIFACT_PROMPT.replace(
     "{artifactContent}",

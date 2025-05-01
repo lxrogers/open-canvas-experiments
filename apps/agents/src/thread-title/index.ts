@@ -9,6 +9,8 @@ import { z } from "zod";
 import {
   getArtifactContent,
   isArtifactMarkdownContent,
+  isArtifactBoardContent,
+  isArtifactCodeContent,
 } from "@opencanvas/shared/utils/artifacts";
 import { TITLE_SYSTEM_PROMPT, TITLE_USER_PROMPT } from "./prompts.js";
 import {
@@ -45,11 +47,16 @@ export const generateTitle = async (
     ? getArtifactContent(state.artifact)
     : undefined;
 
-  const artifactContent = currentArtifactContent
-    ? isArtifactMarkdownContent(currentArtifactContent)
-      ? currentArtifactContent.fullMarkdown
-      : currentArtifactContent.code
-    : undefined;
+  let artifactContent: string | undefined = undefined;
+  if (currentArtifactContent) {
+    if (isArtifactMarkdownContent(currentArtifactContent)) {
+      artifactContent = currentArtifactContent.fullMarkdown;
+    } else if (isArtifactBoardContent(currentArtifactContent)) {
+      artifactContent = currentArtifactContent.board;
+    } else if (isArtifactCodeContent(currentArtifactContent)) {
+      artifactContent = currentArtifactContent.code;
+    }
+  }
 
   const artifactContext = artifactContent
     ? `An artifact was generated during this conversation:\n\n${artifactContent}`

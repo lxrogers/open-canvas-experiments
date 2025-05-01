@@ -1,12 +1,12 @@
 import { motion } from "framer-motion";
 import { TooltipIconButton } from "@/components/ui/assistant-ui/tooltip-icon-button";
 import { useToast } from "@/hooks/use-toast";
-import { isArtifactCodeContent } from "@opencanvas/shared/utils/artifacts";
-import { ArtifactCodeV3, ArtifactMarkdownV3 } from "@opencanvas/shared/types";
+import { isArtifactBoardContent, isArtifactCodeContent } from "@opencanvas/shared/utils/artifacts";
+import { ArtifactBoardV3, ArtifactCodeV3, ArtifactMarkdownV3 } from "@opencanvas/shared/types";
 import { Copy } from "lucide-react";
 
 interface CopyTextProps {
-  currentArtifactContent: ArtifactCodeV3 | ArtifactMarkdownV3;
+  currentArtifactContent: ArtifactCodeV3 | ArtifactMarkdownV3 | ArtifactBoardV3 | undefined;
 }
 
 export function CopyText(props: CopyTextProps) {
@@ -28,10 +28,12 @@ export function CopyText(props: CopyTextProps) {
           try {
             const text = isArtifactCodeContent(props.currentArtifactContent)
               ? props.currentArtifactContent.code
-              : props.currentArtifactContent.fullMarkdown;
+              : (isArtifactBoardContent(props.currentArtifactContent) 
+                ? props.currentArtifactContent.board 
+                : props.currentArtifactContent?.fullMarkdown) ?? '';
             navigator.clipboard.writeText(text).then(() => {
               toast({
-                title: "Copied to clipboard",
+                title: "Copied to clipboard", 
                 description: "The canvas content has been copied.",
                 duration: 5000,
               });

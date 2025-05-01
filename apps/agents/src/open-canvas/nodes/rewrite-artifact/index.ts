@@ -18,7 +18,7 @@ import {
   isUsingO1MiniModel,
   optionallyGetSystemPromptFromConfig,
 } from "../../../utils.js";
-import { isArtifactMarkdownContent } from "@opencanvas/shared/utils/artifacts";
+import { getArtifactContentText } from "@opencanvas/shared/utils/artifacts";
 import { AIMessage } from "@langchain/core/messages";
 import {
   extractThinkingAndResponseTokens,
@@ -43,9 +43,7 @@ export const rewriteArtifact = async (
   const artifactType = artifactMetaToolCall.type;
   const isNewType = artifactType !== currentArtifactContent.type;
 
-  const artifactContent = isArtifactMarkdownContent(currentArtifactContent)
-    ? currentArtifactContent.fullMarkdown
-    : currentArtifactContent.code;
+  const artifactContent = getArtifactContentText(currentArtifactContent);
 
   const formattedPrompt = buildPrompt({
     artifactContent,

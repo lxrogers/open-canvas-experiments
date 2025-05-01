@@ -2,9 +2,11 @@ import { BaseMessage } from "@langchain/core/messages";
 import { LangGraphRunnableConfig } from "@langchain/langgraph";
 import {
   getArtifactContent,
+  getArtifactContentText,
   isArtifactMarkdownContent,
 } from "@opencanvas/shared/utils/artifacts";
 import {
+  ArtifactBoardV3,
   ArtifactCodeV3,
   ArtifactMarkdownV3,
   ArtifactV3,
@@ -105,9 +107,7 @@ export const customAction = async (
     formattedPrompt += `\n\n${formattedConversationHistory}`;
   }
 
-  const artifactContent = isArtifactMarkdownContent(currentArtifactContent)
-    ? currentArtifactContent.fullMarkdown
-    : currentArtifactContent?.code;
+  const artifactContent = getArtifactContentText(currentArtifactContent);
   formattedPrompt += `\n\n${CUSTOM_QUICK_ACTION_ARTIFACT_CONTENT_PROMPT.replace("{artifactContent}", artifactContent || "No artifacts generated yet.")}`;
 
   const newArtifactValues = await smallModel.invoke([
@@ -119,7 +119,7 @@ export const customAction = async (
     return {};
   }
 
-  const newArtifactContent: ArtifactCodeV3 | ArtifactMarkdownV3 = {
+  const newArtifactContent: ArtifactCodeV3 | ArtifactMarkdownV3 | ArtifactBoardV3 = {
     ...currentArtifactContent,
     index: state.artifact.contents.length + 1,
     ...(isArtifactMarkdownContent(currentArtifactContent)

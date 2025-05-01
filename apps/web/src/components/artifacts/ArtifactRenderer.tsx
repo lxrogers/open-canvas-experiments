@@ -4,6 +4,7 @@ import {
   ArtifactCodeV3,
   ArtifactMarkdownV3,
   ProgrammingLanguageOptions,
+  ArtifactBoardV3,
 } from "@opencanvas/shared/types";
 import { EditorView } from "@codemirror/view";
 import { HumanMessage } from "@langchain/core/messages";
@@ -12,6 +13,7 @@ import { v4 as uuidv4 } from "uuid";
 import { ActionsToolbar, CodeToolBar } from "./actions_toolbar";
 import { CodeRenderer } from "./CodeRenderer";
 import { TextRenderer } from "./TextRenderer";
+import { BoardRenderer } from "./BoardRenderer";
 import { CustomQuickActions } from "./actions_toolbar/custom";
 import { getArtifactContent } from "@opencanvas/shared/utils/artifacts";
 import { ArtifactLoading } from "./ArtifactLoading";
@@ -195,6 +197,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
               let currentArtifactContent:
                 | ArtifactCodeV3
                 | ArtifactMarkdownV3
+                | ArtifactBoardV3
                 | undefined = undefined;
               try {
                 currentArtifactContent = artifact
@@ -285,7 +288,11 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
   }, [isInputVisible, selectionBox, isSelectionActive]);
 
   const currentArtifactContent = artifact
-    ? getArtifactContent(artifact)
+    ? (getArtifactContent(artifact) as
+        | ArtifactMarkdownV3
+        | ArtifactCodeV3
+        | ArtifactBoardV3
+        | undefined)
     : undefined;
 
   if (!artifact && isStreaming) {
@@ -351,6 +358,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
                 isHovering={isHoveringOverArtifact}
               />
             ) : null}
+            {currentArtifactContent.type === "board" ? <BoardRenderer /> : null}
           </div>
           <div
             ref={highlightLayerRef}
@@ -390,10 +398,11 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
           streamMessage={streamMessage}
           isTextSelected={isSelectionActive || selectedBlocks !== undefined}
           language={
-            currentArtifactContent.language as ProgrammingLanguageOptions
+            (currentArtifactContent as ArtifactCodeV3).language as ProgrammingLanguageOptions
           }
         />
       ) : null}
+      {currentArtifactContent.type === "board" ? null : null}
     </div>
   );
 }

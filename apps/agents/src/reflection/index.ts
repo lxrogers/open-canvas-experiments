@@ -14,7 +14,7 @@ import { z } from "zod";
 import { ensureStoreInConfig, formatReflections } from "../utils.js";
 import {
   getArtifactContent,
-  isArtifactMarkdownContent,
+  getArtifactContentText,
 } from "@opencanvas/shared/utils/artifacts";
 
 export const reflect = async (
@@ -58,11 +58,7 @@ export const reflect = async (
     ? getArtifactContent(state.artifact)
     : undefined;
 
-  const artifactContent = currentArtifactContent
-    ? isArtifactMarkdownContent(currentArtifactContent)
-      ? currentArtifactContent.fullMarkdown
-      : currentArtifactContent.code
-    : undefined;
+  const artifactContent = getArtifactContentText(currentArtifactContent);
 
   const formattedSystemPrompt = REFLECT_SYSTEM_PROMPT.replace(
     "{artifact}",

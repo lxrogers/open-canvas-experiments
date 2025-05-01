@@ -1,7 +1,11 @@
 import { ReflectionsDialog } from "../../reflections-dialog/ReflectionsDialog";
 import { ArtifactTitle } from "./artifact-title";
 import { NavigateArtifactHistory } from "./navigate-artifact-history";
-import { ArtifactCodeV3, ArtifactMarkdownV3 } from "@opencanvas/shared/types";
+import {
+  ArtifactCodeV3,
+  ArtifactMarkdownV3,
+  ArtifactBoardV3,
+} from "@opencanvas/shared/types";
 import { Assistant } from "@langchain/langgraph-sdk";
 import { PanelRightClose } from "lucide-react";
 import { TooltipIconButton } from "@/components/ui/assistant-ui/tooltip-icon-button";
@@ -10,7 +14,7 @@ interface ArtifactHeaderProps {
   isBackwardsDisabled: boolean;
   isForwardDisabled: boolean;
   setSelectedArtifact: (index: number) => void;
-  currentArtifactContent: ArtifactCodeV3 | ArtifactMarkdownV3;
+  currentArtifactContent: ArtifactCodeV3 | ArtifactMarkdownV3 | ArtifactBoardV3;
   isArtifactSaved: boolean;
   totalArtifactVersions: number;
   selectedAssistant: Assistant | undefined;

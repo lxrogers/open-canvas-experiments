@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { isArtifactCodeContent } from "@opencanvas/shared/utils/artifacts";
+import { isArtifactBoardContent, isArtifactCodeContent } from "@opencanvas/shared/utils/artifacts";
 import {
   CustomModelConfig,
   ArtifactCodeV3,
@@ -7,6 +7,7 @@ import {
   Reflections,
   ContextDocument,
   SearchResult,
+  ArtifactBoardV3,
 } from "@opencanvas/shared/types";
 import { BaseStore, LangGraphRunnableConfig } from "@langchain/langgraph";
 import { initChatModel } from "langchain/chat_models/universal";
@@ -131,7 +132,7 @@ export async function getFormattedReflections(
 }
 
 export const formatArtifactContent = (
-  content: ArtifactMarkdownV3 | ArtifactCodeV3,
+  content: ArtifactMarkdownV3 | ArtifactCodeV3 | ArtifactBoardV3,
   shortenContent?: boolean
 ): string => {
   let artifactContent: string;
@@ -140,6 +141,10 @@ export const formatArtifactContent = (
     artifactContent = shortenContent
       ? content.code?.slice(0, 500)
       : content.code;
+  } else if (isArtifactBoardContent(content))   {
+    artifactContent = shortenContent
+      ? content.board?.slice(0, 500)
+      : content.board;
   } else {
     artifactContent = shortenContent
       ? content.fullMarkdown?.slice(0, 500)
@@ -150,7 +155,7 @@ export const formatArtifactContent = (
 
 export const formatArtifactContentWithTemplate = (
   template: string,
-  content: ArtifactMarkdownV3 | ArtifactCodeV3,
+  content: ArtifactMarkdownV3 | ArtifactCodeV3 | ArtifactBoardV3,
   shortenContent?: boolean
 ): string => {
   return template.replace(
