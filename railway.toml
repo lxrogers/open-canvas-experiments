@@ -1,0 +1,40 @@
+[build]
+builder = "nixpacks"
+buildCommand = "yarn install && yarn build"
+
+[deploy]
+startCommand = "yarn start"
+healthcheckPath = "/"
+healthcheckTimeout = 100
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[deploy.env]
+NODE_ENV = "production"
+PORT = "3000"
+LANGGRAPH_API_URL = "https://agents-production.up.railway.app"
+NEXT_PUBLIC_SUPABASE_URL = { from = "SUPABASE_URL" }
+NEXT_PUBLIC_SUPABASE_ANON_KEY = { from = "SUPABASE_ANON_KEY" }
+
+[agents]
+[agents.build]
+builder = "nixpacks"
+buildCommand = "yarn install && yarn build"
+
+[agents.deploy]
+startCommand = "yarn start"
+healthcheckPath = "/health"
+healthcheckTimeout = 100
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[agents.deploy.env]
+NODE_ENV = "production"
+PORT = "54367"
+OPENAI_API_KEY = { from = "OPENAI_API_KEY" }
+ANTHROPIC_API_KEY = { from = "ANTHROPIC_API_KEY" }
+GOOGLE_API_KEY = { from = "GOOGLE_API_KEY" }
+GROQ_API_KEY = { from = "GROQ_API_KEY" }
+FIREWORKS_API_KEY = { from = "FIREWORKS_API_KEY" }
+NEXT_PUBLIC_SUPABASE_URL = { from = "SUPABASE_URL" }
+SUPABASE_SERVICE_ROLE = { from = "SUPABASE_SERVICE_ROLE" } 

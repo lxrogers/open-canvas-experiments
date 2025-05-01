@@ -1,0 +1,17 @@
+[build]
+builder = "nixpacks"
+buildCommand = "yarn install && yarn build"
+
+[deploy]
+startCommand = "yarn start"
+healthcheckPath = "/"
+healthcheckTimeout = 100
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[deploy.env]
+NODE_ENV = "production"
+PORT = "3000"
+LANGGRAPH_API_URL = "https://agents-production.up.railway.app"
+NEXT_PUBLIC_SUPABASE_URL = { from = "SUPABASE_URL" }
+NEXT_PUBLIC_SUPABASE_ANON_KEY = { from = "SUPABASE_ANON_KEY" } 
