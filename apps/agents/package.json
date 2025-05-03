@@ -20,7 +20,7 @@
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "postinstall": "yarn turbo build",
-    "start": "langgraphjs dev --config ../../langgraph.json --port $PORT --no-browser --no-reload"
+    "start": "node_modules/.bin/langgraphjs dev --config ../../langgraph.json --port $PORT --host 0.0.0.0 --no-browser --no-reload"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
