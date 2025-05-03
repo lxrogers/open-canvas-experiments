@@ -194,7 +194,9 @@ export const BoardRenderer: React.FC<BoardRendererProps> = ({
               backgroundColor: note.color,
               padding: "10px 15px",
               borderRadius: "5px",
-              boxShadow: "0px 1px 5px 1px rgba(0, 0, 0, 0.2)",
+              boxShadow: isCurrentNoteDragging 
+                ? "0px 5px 15px 5px rgba(0, 0, 0, 0.3)"
+                : "0px 1px 5px 1px rgba(0, 0, 0, 0.2)",
               width: "175px",
               minHeight: "210px",
               fontSize: "14px",
@@ -202,10 +204,10 @@ export const BoardRenderer: React.FC<BoardRendererProps> = ({
               wordWrap: "break-word",
               cursor: 'grab',
               userSelect: 'none',
-              // Apply transition including opacity
+              // Apply transition including opacity and box-shadow
               transition: isCurrentNoteDragging 
-                ? "none" 
-                : "left 1s ease-out, top 1s ease-out, background-color 1s ease-out, opacity 0.5s ease-out", // Added opacity transition (0.5s)
+                ? "box-shadow 0.2s ease-out" 
+                : "left 1s ease-out, top 1s ease-out, background-color 1s ease-out, opacity 0.5s ease-out, box-shadow 0.2s ease-out",
               zIndex: isCurrentNoteDragging ? 1000 : 'auto',
               // Control opacity based on animation state
               opacity: startAnimation ? 1 : 0, 
