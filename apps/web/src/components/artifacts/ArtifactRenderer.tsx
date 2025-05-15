@@ -638,6 +638,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
                   isHovering={isHoveringOverArtifact}
                   content={currentArtifactContent.fullMarkdown}
                   suggestedChanges={currentArtifactContent.suggestedChanges}
+                  selectedSuggestionIndex={selectedSuggestionIndex}
                 />
               ) : null}
               {currentArtifactContent.type === "code" ? (
