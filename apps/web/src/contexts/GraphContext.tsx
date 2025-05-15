@@ -15,6 +15,7 @@ import {
   RewriteArtifactMetaToolResponse,
   SearchResult,
   TextHighlight,
+  SuggestedChange,
 } from "@opencanvas/shared/types";
 import { AIMessage, BaseMessage } from "@langchain/core/messages";
 import { useRuns } from "@/hooks/useRuns";
@@ -77,6 +78,8 @@ interface GraphData {
   artifactUpdateFailed: boolean;
   chatStarted: boolean;
   searchEnabled: boolean;
+  shouldSuggestChanges: boolean;
+  setShouldSuggestChanges: Dispatch<SetStateAction<boolean>>;
   setSearchEnabled: Dispatch<SetStateAction<boolean>>;
   setChatStarted: Dispatch<SetStateAction<boolean>>;
   setIsStreaming: Dispatch<SetStateAction<boolean>>;
@@ -142,6 +145,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState(false);
   const [artifactUpdateFailed, setArtifactUpdateFailed] = useState(false);
   const [searchEnabled, setSearchEnabled] = useState(false);
+  const [shouldSuggestChanges, setShouldSuggestChanges] = useState(false);
 
   const [_, setWebSearchResultsId] = useQueryState(
     WEB_SEARCH_RESULTS_QUERY_PARAM
@@ -292,6 +296,9 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       currentThreadId = newThread.thread_id;
     }
 
+    // Add accumulator for suggestChanges
+    let suggestChangesAccumulator = "";
+
     const messagesInput = {
       // `messages` contains the full, unfiltered list of messages
       messages: params.messages,
@@ -311,6 +318,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
         highlightedText: selectedBlocks,
       }),
       webSearchEnabled: searchEnabled,
+      ...(shouldSuggestChanges && { shouldSuggestChanges: true }),
     };
     // Add check for multiple defined fields
     const fieldsToCheck = [
@@ -467,6 +475,93 @@ export function GraphProvider({ children }: { children: ReactNode }) {
               setMessages((prevMessages) =>
                 replaceOrInsertMessageChunk(prevMessages, message)
               );
+            }
+
+            if (langgraphNode === "suggestChanges") {
+              //console.log("[suggestChanges] Received chunk:", nodeChunk);
+              const message = extractStreamDataChunk(nodeChunk);
+              if (!message) {
+                console.log("[suggestChanges] No message in chunk, continuing...");
+                continue;
+              }
+
+              //console.log("[suggestChanges] Extracted message:", message);
+              //console.log("[suggestChanges] Message content:", message.content);
+
+              // Accumulate the content
+              if (message.content) {
+                suggestChangesAccumulator += message.content;
+                //console.log("[suggestChanges] Accumulated content:", suggestChangesAccumulator);
+
+                // Check if we have complete lines
+                const lines = suggestChangesAccumulator.split('\n');
+                const completeLines = lines.slice(0, -1); // All lines except the last one
+                const lastLine = lines[lines.length - 1]; // The potentially incomplete last line
+
+                if (completeLines.length > 0) {
+                  console.log("[suggestChanges] Processing complete lines:", completeLines);
+                  try {
+                    // Parse each complete line as a separate suggestion
+                    const suggestions = completeLines
+                      .map(line => line.trim())
+                      .filter(line => line.length > 0)
+                      .map(line => {
+                        try {
+                          return JSON.parse(line);
+                        } catch (e) {
+                          console.error("[suggestChanges] Failed to parse line:", line, e);
+                          return null;
+                        }
+                      })
+                      .filter(suggestion => suggestion !== null);
+
+                    console.log("[suggestChanges] Parsed suggestions:", suggestions);
+
+                    if (suggestions.length > 0) {
+                      setArtifact((prev) => {
+                        if (!prev) {
+                          console.error("[suggestChanges] No artifact found when updating suggestions");
+                          throw new Error("No artifact found when updating suggestions");
+                        }
+                        //console.log("[suggestChanges] Previous artifact:", prev);
+                        
+                        // Find the current content
+                        const currentContent = prev.contents.find(c => c.index === prev.currentIndex);
+                        if (!currentContent) {
+                          console.error("[suggestChanges] No current content found");
+                          throw new Error("No current content found");
+                        }
+
+                        // Update the content with new suggestions
+                        const updatedContents = prev.contents.map(content => {
+                          if (content.index === prev.currentIndex) {
+                            return {
+                              ...content,
+                              suggestedChanges: [
+                                ...(content.suggestedChanges || []),
+                                ...suggestions
+                              ],
+                            };
+                          }
+                          return content;
+                        });
+
+                        const updated = {
+                          ...prev,
+                          contents: updatedContents,
+                        };
+                        //console.log("[suggestChanges] Updated artifact:", updated);
+                        return updated;
+                      });
+                    }
+                  } catch (e) {
+                    console.error("[suggestChanges] Failed to process suggestions:", e);
+                  }
+                }
+
+                // Keep the last line (which might be incomplete) in the accumulator
+                suggestChangesAccumulator = lastLine;
+              }
             }
 
             if (langgraphNode === "generateArtifact") {
@@ -1432,6 +1527,8 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       chatStarted,
       artifactUpdateFailed,
       searchEnabled,
+      shouldSuggestChanges,
+      setShouldSuggestChanges,
       setSearchEnabled,
       setChatStarted,
       setIsStreaming,

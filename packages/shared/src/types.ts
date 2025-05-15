@@ -113,6 +113,7 @@ export interface ArtifactMarkdownV3 {
   type: "text";
   title: string;
   fullMarkdown: string;
+  suggestedChanges?: SuggestedChange[];
 }
 
 export interface ArtifactCodeV3 {
@@ -121,6 +122,7 @@ export interface ArtifactCodeV3 {
   title: string;
   language: ProgrammingLanguageOptions;
   code: string;
+  suggestedChanges?: SuggestedChange[];
 }
 
 export interface ArtifactBoardV3 {
@@ -128,11 +130,18 @@ export interface ArtifactBoardV3 {
   type: "board";
   title: string;
   board: string;
+  suggestedChanges?: SuggestedChange[];
+}
+
+export interface SuggestedChange {
+  description: string;
+  prevText: string;
+  suggestedText: string;
 }
 
 export interface ArtifactV3 {
   currentIndex: number;
-  contents: (ArtifactMarkdownV3 | ArtifactCodeV3 | ArtifactBoardV3)[];
+  contents: Array<ArtifactCodeV3 | ArtifactMarkdownV3 | ArtifactBoardV3>;
 }
 
 export interface TextHighlight {
@@ -238,4 +247,5 @@ export interface GraphInput {
 
   webSearchEnabled?: boolean;
   webSearchResults?: SearchResult[];
+  shouldSuggestChanges?: boolean;
 }

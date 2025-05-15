@@ -107,6 +107,15 @@ export async function generatePath(
     };
   }
 
+  if (state.shouldSuggestChanges) {
+    return {
+      next: "suggestChanges",
+      ...(newMessages.length
+        ? { messages: newMessages, _messages: newMessages }
+        : {}),
+    };
+  }
+
   if (state.webSearchEnabled) {
     return {
       next: "webSearch",

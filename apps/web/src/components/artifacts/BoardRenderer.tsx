@@ -13,14 +13,14 @@ export type OnNoteUpdate = (index: number, updatedNote: NoteData) => void;
 
 export interface BoardRendererProps {
   boardContent: string;
-  onNoteUpdate: OnNoteUpdate; // Add the callback prop
-  isStreaming: boolean; // Add isStreaming prop
+  onNoteUpdate: OnNoteUpdate;
+  isStreaming: boolean;
 }
 
 export const BoardRenderer: React.FC<BoardRendererProps> = ({ 
   boardContent, 
   onNoteUpdate,
-  isStreaming // Destructure isStreaming
+  isStreaming
 }) => {
   // State for initial parsed notes
   const initialNotes = useMemo(() => {

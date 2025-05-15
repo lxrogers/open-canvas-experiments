@@ -16,6 +16,7 @@ import { OpenCanvasGraphAnnotation } from "./state.js";
 import { summarizer } from "./nodes/summarizer.js";
 import { graph as webSearchGraph } from "../web-search/index.js";
 import { createAIMessageFromWebResults } from "../utils.js";
+import { suggestChanges } from "./nodes/suggestChanges.js";
 
 const routeNode = (state: typeof OpenCanvasGraphAnnotation.State) => {
   if (!state.next) {
@@ -125,6 +126,7 @@ const builder = new StateGraph(OpenCanvasGraphAnnotation)
   .addNode("summarizer", summarizer)
   .addNode("webSearch", webSearchGraph)
   .addNode("routePostWebSearch", routePostWebSearch)
+  .addNode("suggestChanges", suggestChanges)
   // Initial router
   .addConditionalEdges("generatePath", routeNode, [
     "updateArtifact",
@@ -136,6 +138,7 @@ const builder = new StateGraph(OpenCanvasGraphAnnotation)
     "customAction",
     "updateHighlightedText",
     "webSearch",
+    "suggestChanges",
   ])
   // Edges
   .addEdge("generateArtifact", "generateFollowup")
@@ -146,6 +149,7 @@ const builder = new StateGraph(OpenCanvasGraphAnnotation)
   .addEdge("rewriteCodeArtifactTheme", "generateFollowup")
   .addEdge("customAction", "generateFollowup")
   .addEdge("webSearch", "routePostWebSearch")
+  .addEdge("suggestChanges", "generateFollowup")
   // End edges
   .addEdge("replyToGeneralInput", "cleanState")
   // Only reflect if an artifact was generated/updated.

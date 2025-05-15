@@ -5,6 +5,8 @@ import {
   ArtifactMarkdownV3,
   ProgrammingLanguageOptions,
   ArtifactBoardV3,
+  SuggestedChange,
+  GraphInput,
 } from "@opencanvas/shared/types";
 import { EditorView } from "@codemirror/view";
 import { HumanMessage } from "@langchain/core/messages";
@@ -22,6 +24,7 @@ import { useGraphContext } from "@/contexts/GraphContext";
 import { ArtifactHeader } from "./header";
 import { useUserContext } from "@/contexts/UserContext";
 import { useAssistantContext } from "@/contexts/AssistantContext";
+import { motion, AnimatePresence } from "framer-motion";
 
 export interface ArtifactRendererProps {
   isEditing: boolean;
@@ -35,6 +38,128 @@ interface SelectionBox {
   left: number;
   text: string;
 }
+
+const CARD_SPACING = 6; // Spacing between cards (reduced from 20)
+const CARD_BASE_HEIGHT_ESTIMATE = 70; // Estimate for unselected card height (p-3, h3, etc.)
+const CARD_DETAILS_HEIGHT_ESTIMATE = 150; // Estimate for expanded details
+
+interface SuggestionCardProps {
+  suggestion: SuggestedChange;
+  originalIndex: number;
+  isSelected: boolean;
+  onSelectSuggestion: (index: number | null) => void;
+  yPosition: number;
+  cardRef: React.RefObject<HTMLDivElement>;
+}
+
+const SuggestionCard: React.FC<SuggestionCardProps> = ({
+  suggestion,
+  originalIndex,
+  isSelected,
+  onSelectSuggestion,
+  yPosition,
+  cardRef,
+}) => {
+  return (
+    <motion.div
+      ref={cardRef}
+      key={originalIndex}
+      layout // handles smooth transition if size changes
+      data-suggestion-card-index={originalIndex}
+      initial={{ opacity: 0, y: yPosition + 20 }}
+      animate={{
+        opacity: 1,
+        y: yPosition,
+        position: "absolute",
+        left: "1rem", // Corresponds to p-4 on parent
+        right: "1rem",
+        transition: { duration: 0.2, ease: [0.16, 1, 0.3, 1] }, // Custom cubic-bezier for snappier ease-out
+      }}
+      exit={{ opacity: 0, y: yPosition - 20, transition: {duration: 0.15, ease: [0.16, 1, 0.3, 1]} }}
+      onClick={() => onSelectSuggestion(isSelected ? null : originalIndex)}
+      className={cn(
+        "rounded-lg p-3 border cursor-pointer w-[calc(100%-2rem)]", // Width takes parent padding into account
+        isSelected
+          ? "bg-white/80 backdrop-blur-sm shadow-lg border-gray-200 z-10 hover:bg-white/90"
+          : "bg-slate-100 hover:bg-slate-200 border-slate-300 z-0"
+      )}
+    >
+      <h3 className="font-medium text-gray-900 mb-1 text-sm truncate flex items-center gap-1.5">
+        <svg 
+          xmlns="http://www.w3.org/2000/svg" 
+          viewBox="0 0 24 24" 
+          fill="currentColor" 
+          className="w-5 h-5 text-blue-500 flex-shrink-0"
+          style={{ minWidth: '20px' }}
+        >
+          <path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-8.4 8.4a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32l8.4-8.4z" />
+          <path d="M5.25 5.25a3 3 0 00-3 3v10.5a3 3 0 003 3h10.5a3 3 0 003-3V13.5a.75.75 0 00-1.5 0v5.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5V8.25a1.5 1.5 0 011.5-1.5h5.25a.75.75 0 000-1.5H5.25z" />
+        </svg>
+        {suggestion.description}
+      </h3>
+      <AnimatePresence initial={false}>
+        {isSelected && (
+          <motion.div
+            key="details"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1, transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] } }}
+            exit={{ height: 0, opacity: 0, transition: { duration: 0.1, ease: [0.16, 1, 0.3, 1] } }}
+            className="overflow-hidden mt-2"
+          >
+            <div className="space-y-2 pt-1">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Previous:</p>
+                <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto whitespace-pre-wrap break-all text-gray-500">
+                  {suggestion.prevText}
+                </pre>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Suggested:</p>
+                <pre className="bg-blue-50 p-2 rounded text-xs overflow-x-auto whitespace-pre-wrap break-all text-blue-700">
+                  {suggestion.suggestedText}
+                </pre>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+};
+
+const SuggestionCards: React.FC<{
+  suggestions: SuggestedChange[] | undefined;
+  selectedSuggestionIndex: number | null;
+  onSelectSuggestion: (index: number | null) => void;
+  containerRef: React.RefObject<HTMLDivElement>;
+  cardYPositions: number[];
+  cardRefs: React.RefObject<HTMLDivElement>[];
+}> = ({ suggestions, selectedSuggestionIndex, onSelectSuggestion, containerRef, cardYPositions, cardRefs }) => {
+  if (!suggestions || suggestions.length === 0) {
+    return null;
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="w-full h-full overflow-y-auto p-4 relative" // relative for absolute children, p-4 for padding
+    >
+      <AnimatePresence>
+        {suggestions.map((suggestion, index) => (
+          <SuggestionCard
+            key={index}
+            suggestion={suggestion}
+            originalIndex={index}
+            isSelected={index === selectedSuggestionIndex}
+            onSelectSuggestion={onSelectSuggestion}
+            yPosition={cardYPositions[index] === undefined ? index * (CARD_BASE_HEIGHT_ESTIMATE + CARD_SPACING) : cardYPositions[index]} // Fallback if not calculated yet
+            cardRef={cardRefs[index]}
+          />
+        ))}
+      </AnimatePresence>
+    </div>
+  );
+};
 
 function ArtifactRendererComponent(props: ArtifactRendererProps) {
   const { graphData } = useGraphContext();
@@ -51,12 +176,16 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
     setMessages,
     streamMessage,
     setSelectedBlocks,
+    shouldSuggestChanges,
+    setShouldSuggestChanges,
   } = graphData;
   const editorRef = useRef<EditorView | null>(null);
-  const artifactContentRef = useRef<HTMLDivElement>(null);
+  const artifactContentRef = useRef<HTMLDivElement>(null); 
   const highlightLayerRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null); 
   const selectionBoxRef = useRef<HTMLDivElement>(null);
+  const suggestionCardsContainerRef = useRef<HTMLDivElement>(null); 
+
   const [selectionBox, setSelectionBox] = useState<SelectionBox>();
   const [selectionIndexes, setSelectionIndexes] = useState<{
     start: number;
@@ -67,6 +196,129 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
   const [inputValue, setInputValue] = useState("");
   const [isHoveringOverArtifact, setIsHoveringOverArtifact] = useState(false);
   const [isValidSelectionOrigin, setIsValidSelectionOrigin] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number | null>(null);
+  const [cardYPositions, setCardYPositions] = useState<number[]>([]);
+  const cardRefs = useRef<React.RefObject<HTMLDivElement>[]>([]); 
+
+  const currentArtifactContent = artifact
+  ? (getArtifactContent(artifact) as
+      | ArtifactMarkdownV3
+      | ArtifactCodeV3
+      | ArtifactBoardV3
+      | undefined)
+  : undefined;
+
+  useEffect(() => {
+    const numSuggestions = currentArtifactContent?.suggestedChanges?.length || 0;
+    cardRefs.current = Array(numSuggestions).fill(null).map((_, i) => cardRefs.current[i] || React.createRef<HTMLDivElement>());
+    // Initialize positions when suggestions change to avoid undefined yPosition on first render of new cards
+    if (numSuggestions > 0 && cardYPositions.length !== numSuggestions) {
+      setCardYPositions(Array(numSuggestions).fill(0).map((_, i) => i * (CARD_BASE_HEIGHT_ESTIMATE + CARD_SPACING)));
+    }
+  }, [currentArtifactContent?.suggestedChanges, cardYPositions.length]);
+
+  const handleSelectSuggestion = useCallback((index: number | null) => {
+    setSelectedSuggestionIndex(prevIndex => (prevIndex === index ? null : index));
+  }, []);
+
+  useEffect(() => {
+    if (!artifactContentRef.current || !suggestionCardsContainerRef.current || !currentArtifactContent?.suggestedChanges) {
+      setCardYPositions([]);
+      return;
+    }
+
+    const calculateLayout = () => {
+      const suggestions = currentArtifactContent.suggestedChanges || [];
+      if (suggestions.length === 0) {
+        setCardYPositions([]);
+        return;
+      }
+
+      const finalPositionsMap = new Map<number, number>();
+      const cardData: { index: number; yDesired: number; height: number }[] = [];
+
+      // 1. Calculate initial desired Y and get current/estimated heights for all cards
+      const sidebarScrollContainerRect = suggestionCardsContainerRef.current!.getBoundingClientRect();
+      
+      suggestions.forEach((_, index) => {
+        let desiredY = index * (CARD_BASE_HEIGHT_ESTIMATE + CARD_SPACING); // Default initial stacking
+        const prevTextElement = artifactContentRef.current!.querySelector(
+          `[data-prevtext-id="suggestion-prev-${index}"]`
+        ) as HTMLElement | null;
+
+        if (prevTextElement) {
+          const prevTextRect = prevTextElement.getBoundingClientRect();
+          desiredY = prevTextRect.top - sidebarScrollContainerRect.top + suggestionCardsContainerRef.current!.scrollTop - 10; // Offset by 10px up
+        }
+        
+        const cardElement = cardRefs.current[index]?.current;
+        const currentHeight = cardElement?.offsetHeight || 
+                              (index === selectedSuggestionIndex 
+                                ? CARD_BASE_HEIGHT_ESTIMATE + CARD_DETAILS_HEIGHT_ESTIMATE 
+                                : CARD_BASE_HEIGHT_ESTIMATE);
+        cardData.push({ index, yDesired: desiredY, height: currentHeight });
+      });
+
+      // 2. Prioritize selected card
+      if (selectedSuggestionIndex !== null) {
+        const selectedCardInfo = cardData.find(c => c.index === selectedSuggestionIndex);
+        if (selectedCardInfo) {
+          finalPositionsMap.set(selectedCardInfo.index, selectedCardInfo.yDesired);
+
+          // Place cards ABOVE the selected card
+          let lastPlacedYAbove = selectedCardInfo.yDesired;
+          const cardsToPlaceAbove = cardData
+            .filter(c => c.index !== selectedSuggestionIndex && c.yDesired < selectedCardInfo.yDesired)
+            .sort((a, b) => b.yDesired - a.yDesired); // Sort descending by Y (closest to selected first)
+
+          for (const card of cardsToPlaceAbove) {
+            const targetY = lastPlacedYAbove - card.height - CARD_SPACING;
+            // card.yDesired is used as a preference, but constrained by not overlapping
+            const finalY = Math.min(card.yDesired, targetY);
+            finalPositionsMap.set(card.index, finalY);
+            lastPlacedYAbove = finalY; 
+          }
+
+          // Place cards BELOW the selected card
+          let lastPlacedYBelow = selectedCardInfo.yDesired + selectedCardInfo.height + CARD_SPACING;
+          const cardsToPlaceBelow = cardData
+            .filter(c => c.index !== selectedSuggestionIndex && c.yDesired >= selectedCardInfo.yDesired)
+            .sort((a, b) => a.yDesired - b.yDesired); // Sort ascending by Y (closest to selected first)
+
+          for (const card of cardsToPlaceBelow) {
+            // card.yDesired is used as a preference, but constrained by not overlapping
+            const finalY = Math.max(card.yDesired, lastPlacedYBelow);
+            finalPositionsMap.set(card.index, finalY);
+            lastPlacedYBelow = finalY + card.height + CARD_SPACING;
+          }
+        }
+      } else {
+        // No card selected: Original stacking algorithm (sorted by desired Y)
+        cardData.sort((a, b) => a.yDesired - b.yDesired);
+        let accumulatedY = 0;
+        for (let i = 0; i < cardData.length; i++) {
+          const cardInfo = cardData[i];
+          let currentCardY = Math.max(cardInfo.yDesired, accumulatedY);
+          finalPositionsMap.set(cardInfo.index, currentCardY);
+          accumulatedY = currentCardY + cardInfo.height + CARD_SPACING;
+        }
+      }
+      
+      const newYPositions = suggestions.map((_, index) => finalPositionsMap.get(index) || 0);
+      setCardYPositions(newYPositions);
+    };
+    
+    const timerId = setTimeout(calculateLayout, 100); // Increased delay for more complex calc + DOM updates
+    
+    const mainContentEl = artifactContentRef.current;
+    mainContentEl?.addEventListener('scroll', calculateLayout);
+
+    return () => {
+        clearTimeout(timerId);
+        mainContentEl?.removeEventListener('scroll', calculateLayout);
+    }
+
+  }, [selectedSuggestionIndex, currentArtifactContent?.suggestedChanges, artifactContentRef.current?.scrollTop]);
 
   const handleMouseUp = useCallback(() => {
     const selection = window.getSelection();
@@ -74,7 +326,6 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
       const range = selection.getRangeAt(0);
       const selectedText = range.toString().trim();
 
-      // Check if the selection originated from within the artifact content
       if (selectedText && artifactContentRef.current) {
         const isWithinArtifact = (node: Node | null): boolean => {
           if (!node) return false;
@@ -82,7 +333,6 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
           return isWithinArtifact(node.parentNode);
         };
 
-        // Check both start and end containers
         const startInArtifact = isWithinArtifact(range.startContainer);
         const endInArtifact = isWithinArtifact(range.endContainer);
 
@@ -91,21 +341,20 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
           const rects = range.getClientRects();
           const firstRect = rects[0];
           const lastRect = rects[rects.length - 1];
-          const contentRect = contentRef.current.getBoundingClientRect();
+          const mainContentRect = contentRef.current.getBoundingClientRect();
 
-          const boxWidth = 400; // Approximate width of the selection box
-          let left = lastRect.right - contentRect.left - boxWidth;
+          const boxWidth = 400;
+          let left = lastRect.right - mainContentRect.left - boxWidth;
 
           if (left < 0) {
-            left = Math.min(0, firstRect.left - contentRect.left);
+            left = Math.min(0, firstRect.left - mainContentRect.left);
           }
-          // Ensure the box doesn't go beyond the left edge
           if (left < 0) {
-            left = Math.min(0, firstRect.left - contentRect.left);
+            left = Math.min(0, firstRect.left - mainContentRect.left);
           }
 
           setSelectionBox({
-            top: lastRect.bottom - contentRect.top,
+            top: lastRect.bottom - mainContentRect.top,
             left: left,
             text: selectedText,
           });
@@ -113,7 +362,6 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
           setIsSelectionActive(true);
         } else {
           setIsValidSelectionOrigin(false);
-          handleCleanupState();
         }
       }
     }
@@ -137,8 +385,15 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
       ) {
         handleCleanupState();
       }
+
+      if (suggestionCardsContainerRef.current && 
+          !suggestionCardsContainerRef.current.contains(event.target as Node) &&
+          selectedSuggestionIndex !== null
+      ) {
+        handleSelectSuggestion(null); 
+      }
     },
-    [isSelectionActive]
+    [isSelectionActive, selectedSuggestionIndex, handleSelectSuggestion]
   );
 
   const handleSelectionBoxMouseDown = useCallback((event: React.MouseEvent) => {
@@ -153,7 +408,8 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
 
     setMessages((prevMessages) => [...prevMessages, humanMessage]);
     handleCleanupState();
-    await streamMessage({
+
+    const streamMessageParams: GraphInput = {
       messages: [convertToOpenAIFormat(humanMessage)],
       ...(selectionIndexes && {
         highlightedCode: {
@@ -161,8 +417,14 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
           endCharIndex: selectionIndexes.end,
         },
       }),
-    });
+    };
+
+    await streamMessage(streamMessageParams);
   };
+
+  const handleSuggestChangesToggle = useCallback((enabled: boolean) => {
+    setShouldSuggestChanges(enabled);
+  }, [setShouldSuggestChanges]);
 
   useEffect(() => {
     document.addEventListener("mouseup", handleMouseUp);
@@ -173,14 +435,13 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
       document.removeEventListener("mousedown", handleDocumentMouseDown);
     };
   }, [handleMouseUp, handleDocumentMouseDown]);
-
+  
   useEffect(() => {
     try {
       if (artifactContentRef.current && highlightLayerRef.current) {
-        const content = artifactContentRef.current;
+        const contentEl = artifactContentRef.current;
         const highlightLayer = highlightLayerRef.current;
 
-        // Clear existing highlights
         highlightLayer.innerHTML = "";
 
         if (isSelectionActive && selectionBox) {
@@ -188,31 +449,29 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
           if (selection && selection.rangeCount > 0) {
             const range = selection.getRangeAt(0);
 
-            if (content.contains(range.commonAncestorContainer)) {
+            if (contentEl.contains(range.commonAncestorContainer)) {
               const rects = range.getClientRects();
-              const layerRect = highlightLayer.getBoundingClientRect();
+              const contentElRect = contentEl.getBoundingClientRect();
 
-              // Calculate start and end indexes
               let startIndex = 0;
               let endIndex = 0;
-              let currentArtifactContent:
+              let currentArtifactContentForHighlight:
                 | ArtifactCodeV3
                 | ArtifactMarkdownV3
                 | ArtifactBoardV3
                 | undefined = undefined;
               try {
-                currentArtifactContent = artifact
+                currentArtifactContentForHighlight = artifact
                   ? getArtifactContent(artifact)
                   : undefined;
               } catch (_) {
-                console.error(
-                  "[ArtifactRenderer.tsx L229]\n\nERROR NO ARTIFACT CONTENT FOUND\n\n",
+                 console.error(
+                  "[ArtifactRenderer.tsx L-highlight]\n\nERROR NO ARTIFACT CONTENT FOUND\n\n",
                   artifact
                 );
-                // no-op
               }
 
-              if (currentArtifactContent?.type === "code") {
+              if (currentArtifactContentForHighlight?.type === "code") {
                 if (editorRef.current) {
                   const from = editorRef.current.posAtDOM(
                     range.startContainer,
@@ -234,10 +493,9 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
                 highlightEl.className =
                   "absolute bg-[#3597934d] pointer-events-none";
 
-                // Adjust the positioning and size
                 const verticalPadding = 3;
-                highlightEl.style.left = `${rect.left - layerRect.left}px`;
-                highlightEl.style.top = `${rect.top - layerRect.top - verticalPadding}px`;
+                highlightEl.style.left = `${rect.left - contentElRect.left}px`;
+                highlightEl.style.top = `${rect.top - contentElRect.top - verticalPadding + contentEl.scrollTop}px`;
                 highlightEl.style.width = `${rect.width}px`;
                 highlightEl.style.height = `${rect.height + verticalPadding * 2}px`;
 
@@ -250,35 +508,30 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
     } catch (e) {
       console.error("Failed to get artifact selection", e);
     }
-  }, [isSelectionActive, selectionBox]);
+  }, [isSelectionActive, selectionBox, artifact]);
 
   useEffect(() => {
     if (!!selectedBlocks && !isSelectionActive) {
-      // Selection is not active but selected blocks are present. Clear them.
       setSelectedBlocks(undefined);
     }
-  }, [selectedBlocks, isSelectionActive]);
+  }, [selectedBlocks, isSelectionActive, setSelectedBlocks]);
 
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      // Check if we're in an input/textarea element
       const activeElement = document.activeElement;
       const isInputActive =
         activeElement instanceof HTMLInputElement ||
         activeElement instanceof HTMLTextAreaElement;
 
-      // If selection states are active and we're not in an input field
       if (
         (isInputVisible || selectionBox || isSelectionActive) &&
         !isInputActive
       ) {
-        // Check if the key is a character key or backspace/delete
         if (e.key.length === 1 || e.key === "Backspace" || e.key === "Delete") {
           handleCleanupState();
         }
       }
 
-      // Handle escape key for input box
       if ((isInputVisible || isSelectionActive) && e.key === "Escape") {
         handleCleanupState();
       }
@@ -287,29 +540,17 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
     document.addEventListener("keydown", handleKeyPress);
     return () => document.removeEventListener("keydown", handleKeyPress);
   }, [isInputVisible, selectionBox, isSelectionActive]);
-
-  const currentArtifactContent = artifact
-    ? (getArtifactContent(artifact) as
-        | ArtifactMarkdownV3
-        | ArtifactCodeV3
-        | ArtifactBoardV3
-        | undefined)
-    : undefined;
-
-  // --- Handler for updating board notes --- 
+ 
   const handleBoardNoteUpdate: OnNoteUpdate = useCallback(
     (updatedIndex, updatedNoteData) => {
       if (!artifact || !currentArtifactContent || currentArtifactContent.type !== 'board') {
         console.error("Cannot update note: Invalid artifact state.");
         return;
       }
-
       try {
-        // 1. Parse existing NDJSON
         const lines = currentArtifactContent.board.trim().split('\n');
         const notes = lines.map(line => JSON.parse(line));
         
-        // 2. Update the specific note
         if (updatedIndex >= 0 && updatedIndex < notes.length) {
           notes[updatedIndex] = { 
             ...notes[updatedIndex], 
@@ -321,41 +562,28 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
            return;
         }
 
-        // 3. Re-serialize to NDJSON
         const updatedBoardString = notes.map(note => JSON.stringify(note)).join('\n');
 
-        // 4. Update artifact state
         const updatedBoardContent: ArtifactBoardV3 = {
           ...currentArtifactContent,
           board: updatedBoardString,
         };
 
-        // Create new contents array with the updated board content
         const newContents = artifact.contents.map(content => 
           content.index === currentArtifactContent.index ? updatedBoardContent : content
         );
 
-        // Set the new artifact state
         setArtifact({
           ...artifact,
           contents: newContents,
-          // Keep currentIndex the same, as we are just updating content
         });
 
       } catch (error) {
         console.error("Failed to update board note:", error);
       }
     },
-    [artifact, currentArtifactContent, setArtifact] // Dependencies
+    [artifact, currentArtifactContent, setArtifact]
   );
-
-  // --- Debug Logging Start ---
-  console.log("[ArtifactRenderer] Received artifact:", artifact);
-  console.log(
-    "[ArtifactRenderer] Determined currentArtifactContent:",
-    currentArtifactContent
-  );
-  // --- Debug Logging End ---
 
   if (!artifact && isStreaming) {
     return <ArtifactLoading />;
@@ -375,7 +603,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
     isStreaming;
 
   return (
-    <div className="relative w-full h-full max-h-screen overflow-auto">
+    <div className="relative w-full h-full max-h-screen overflow-auto flex flex-col">
       <ArtifactHeader
         isArtifactSaved={isArtifactSaved}
         isBackwardsDisabled={isBackwardsDisabled}
@@ -387,67 +615,76 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
         artifactUpdateFailed={artifactUpdateFailed}
         chatCollapsed={props.chatCollapsed}
         setChatCollapsed={props.setChatCollapsed}
+        onSuggestChangesToggle={handleSuggestChangesToggle}
       />
-      <div
-        ref={contentRef}
-        className={cn(
-          "flex justify-center h-full",
-          currentArtifactContent.type === "code" ? "pt-[10px]" : ""
-        )}
-      >
+      <div className="flex flex-1 h-full overflow-hidden">
         <div
+          ref={artifactContentRef}
           className={cn(
-            "relative min-h-full",
-            currentArtifactContent.type === "code" ? "min-w-full" : "min-w-full"
+            "flex-1 flex justify-center overflow-y-auto relative",
+            currentArtifactContent.type === "code" ? "pt-[10px]" : ""
           )}
         >
-          <div
-            className="h-full"
-            ref={artifactContentRef}
-            onMouseEnter={() => setIsHoveringOverArtifact(true)}
-            onMouseLeave={() => setIsHoveringOverArtifact(false)}
-          >
-            {currentArtifactContent.type === "text" ? (
-              <TextRenderer
-                isInputVisible={isInputVisible}
-                isEditing={props.isEditing}
-                isHovering={isHoveringOverArtifact}
-              />
-            ) : null}
-            {currentArtifactContent.type === "code" ? (
-              <CodeRenderer
-                editorRef={editorRef}
-                isHovering={isHoveringOverArtifact}
-              />
-            ) : null}
-            {currentArtifactContent.type === "board" ? (
-              <BoardRenderer 
-                boardContent={currentArtifactContent.board} 
-                onNoteUpdate={handleBoardNoteUpdate}
-                isStreaming={isStreaming}
-              />
-            ) : null}
+          <div className={cn("relative", currentArtifactContent.type === "code" ? "w-full" : "max-w-4xl mx-auto w-full")}>
+            <div
+              className="h-full"
+              onMouseEnter={() => setIsHoveringOverArtifact(true)}
+              onMouseLeave={() => setIsHoveringOverArtifact(false)}
+            >
+              {currentArtifactContent.type === "text" ? (
+                <TextRenderer
+                  isInputVisible={isInputVisible}
+                  isEditing={props.isEditing}
+                  isHovering={isHoveringOverArtifact}
+                  content={currentArtifactContent.fullMarkdown}
+                  suggestedChanges={currentArtifactContent.suggestedChanges}
+                />
+              ) : null}
+              {currentArtifactContent.type === "code" ? (
+                <CodeRenderer
+                  editorRef={editorRef}
+                  isHovering={isHoveringOverArtifact}
+                />
+              ) : null}
+              {currentArtifactContent.type === "board" ? (
+                <BoardRenderer 
+                  boardContent={currentArtifactContent.board} 
+                  onNoteUpdate={handleBoardNoteUpdate}
+                  isStreaming={isStreaming}
+                />
+              ) : null}
+            </div>
+            <div
+              ref={highlightLayerRef}
+              className="absolute top-0 left-0 w-full h-full pointer-events-none z-0"
+            />
           </div>
-          <div
-            ref={highlightLayerRef}
-            className="absolute top-0 left-0 w-full h-full pointer-events-none"
+          {selectionBox && isSelectionActive && isValidSelectionOrigin && (
+            <AskOpenCanvas
+              ref={selectionBoxRef}
+              inputValue={inputValue}
+              setInputValue={setInputValue}
+              isInputVisible={isInputVisible}
+              selectionBox={selectionBox}
+              setIsInputVisible={setIsInputVisible}
+              handleSubmitMessage={handleSubmit}
+              handleSelectionBoxMouseDown={handleSelectionBoxMouseDown}
+              artifact={artifact}
+              selectionIndexes={selectionIndexes}
+              handleCleanupState={handleCleanupState}
+            />
+          )}
+        </div>
+        <div className="flex-shrink-0 w-80 h-full bg-gray-50 border-l border-gray-200"> 
+          <SuggestionCards 
+            suggestions={currentArtifactContent.suggestedChanges} 
+            selectedSuggestionIndex={selectedSuggestionIndex}
+            onSelectSuggestion={handleSelectSuggestion}
+            containerRef={suggestionCardsContainerRef} 
+            cardYPositions={cardYPositions}
+            cardRefs={cardRefs.current}
           />
         </div>
-        {selectionBox && isSelectionActive && isValidSelectionOrigin && (
-          <AskOpenCanvas
-            ref={selectionBoxRef}
-            inputValue={inputValue}
-            setInputValue={setInputValue}
-            isInputVisible={isInputVisible}
-            selectionBox={selectionBox}
-            setIsInputVisible={setIsInputVisible}
-            handleSubmitMessage={handleSubmit}
-            handleSelectionBoxMouseDown={handleSelectionBoxMouseDown}
-            artifact={artifact}
-            selectionIndexes={selectionIndexes}
-            handleCleanupState={handleCleanupState}
-          />
-        )}
       </div>
       <CustomQuickActions
         streamMessage={streamMessage}

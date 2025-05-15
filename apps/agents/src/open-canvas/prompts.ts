@@ -384,3 +384,23 @@ export const BOARD_REWRITE_DETAILS_PROMPT = `
 - keep the existing colors when possible, unless explicitly requested to change the colors.
 - try to space the notes out horizontally at first.
 `;
+
+export const SUGGEST_CHANGES_PROMPT = `You are an AI who is tasked with suggesting changes to the following artifact.
+Suggestions include the text which you are proposing to change, a description of the change, and the suggested new text.
+Limit the suggestions to 2-4 at a time.
+
+Here is the current content of the artifact:
+<artifact>
+{artifactContent}
+</artifact>
+
+
+Rules and guidelines:
+<rules-guidelines>
+- Use new-line delineated JSON to represent your suggestions, using this format:
+{"description": "Improve wording", "prevText": "The text you are proposing to change", "suggestedText": "The suggested new text"}
+{"description": "Add a metaphor", "prevText": "The text you are proposing to change", "suggestedText": "The suggested new text"}
+- Do not include any other text before or after the JSON.
+- Only include the words that are changed, not the entire sentence or phrase.
+- Each line should be a separate suggestion, delineated by a new-line. Don't make it an array.
+</rules-guidelines>`;

@@ -21,6 +21,7 @@ interface ArtifactHeaderProps {
   artifactUpdateFailed: boolean;
   chatCollapsed: boolean;
   setChatCollapsed: (c: boolean) => void;
+  onSuggestChangesToggle?: (enabled: boolean) => void;
 }
 
 export function ArtifactHeader(props: ArtifactHeaderProps) {
@@ -45,6 +46,14 @@ export function ArtifactHeader(props: ArtifactHeaderProps) {
         />
       </div>
       <div className="flex gap-2 items-end mt-[10px] mr-[6px]">
+        <div className="flex items-center gap-2 mr-2">
+          <label className="text-sm text-gray-600">Suggest Changes</label>
+          <input
+            type="checkbox"
+            onChange={(e) => props.onSuggestChangesToggle?.(e.target.checked)}
+            className="w-4 h-4 cursor-pointer"
+          />
+        </div>
         <NavigateArtifactHistory
           isBackwardsDisabled={props.isBackwardsDisabled}
           isForwardDisabled={props.isForwardDisabled}
