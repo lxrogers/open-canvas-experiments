@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
-import { ArtifactMarkdownV3 } from "@opencanvas/shared/types";
+import { ArtifactMarkdownV3, SuggestedChange } from "@opencanvas/shared/types";
 import "@blocknote/core/fonts/inter.css";
 import {
   getDefaultReactSlashMenuItems,
@@ -19,11 +19,10 @@ import { motion } from "framer-motion";
 import { Textarea } from "../ui/textarea";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
-import { SuggestedChange } from "@opencanvas/shared/types";
 import rehypeRaw from 'rehype-raw';
 
 const cleanText = (text: string) => {
-  return text.replaceAll("\\n", "\n");
+  return text.replaceAll("\\\\n", "\\n");
 };
 
 function ViewRawText({
@@ -56,58 +55,258 @@ function ViewRawText({
   );
 }
 
-interface TextRendererProps {
-  isInputVisible: boolean;
+export interface TextRendererProps {
   isEditing: boolean;
   isHovering: boolean;
-  content?: string;
+  isInputVisible: boolean;
   suggestedChanges?: SuggestedChange[];
   selectedSuggestionIndex?: number | null;
-  onContentChange: (newContent: string) => void;
+  onSuggestionHighlightClick?: (index: number) => void;
 }
 
-export const TextRenderer: React.FC<TextRendererProps> = ({
-  isInputVisible,
-  isEditing,
-  isHovering,
-  content = "",
-  suggestedChanges = [],
-  selectedSuggestionIndex,
-  onContentChange,
-}) => {
+export function TextRendererComponent(props: TextRendererProps) {
+  const editor = useCreateBlockNote({});
+  const { graphData } = useGraphContext();
+  const {
+    artifact,
+    isStreaming,
+    updateRenderedArtifactRequired,
+    firstTokenReceived,
+    setArtifact,
+    setSelectedBlocks,
+    setUpdateRenderedArtifactRequired,
+  } = graphData;
+
+  const [rawMarkdown, setRawMarkdown] = useState("");
+  const [isRawView, setIsRawView] = useState(false);
+  const [manuallyUpdatingArtifact, setManuallyUpdatingArtifact] =
+    useState(false);
+
   const containerRef = useRef<HTMLDivElement>(null);
-  const [highlightBoxStyle, setHighlightBoxStyle] = useState<React.CSSProperties | null>(null);
+  const [allHighlightBoxStyles, setAllHighlightBoxStyles] = useState<React.CSSProperties[]>([]);
 
-  const editor = useCreateBlockNote({
-    slashMenuItems: getDefaultReactSlashMenuItems(),
-    uploadFile: async (file: File) => {
-      console.warn("File upload not implemented for BlockNote. Returning placeholder.");
-      return "https://via.placeholder.com/150?text=Uploaded+Image";
-    },
-    onEditorContentChange: async (editableEditor) => {
-      const markdown = await editableEditor.blocksToMarkdownLossy(editableEditor.document);
-      onContentChange(markdown);
-    },
-  });
-
-  // Load content into BlockNote editor when isEditing is true or content changes
   useEffect(() => {
-    if (isEditing && editor && typeof content === 'string') {
-      const loadContentIntoEditor = async () => {
-        const currentEditorMarkdown = editor.document.length > 0 ? await editor.blocksToMarkdownLossy(editor.document) : "";
-        if (content !== currentEditorMarkdown) {
-          const blocks = await editor.tryParseMarkdownToBlocks(content);
-          editor.replaceBlocks(editor.document, blocks);
-        }
-      };
-      loadContentIntoEditor();
-    }
-  }, [isEditing, content, editor]);
+    const selectedText = editor.getSelectedText();
+    const selection = editor.getSelection();
 
-  // Process content with suggested changes (for ReactMarkdown view)
-  const processContentWithSuggestions = (text: string, suggestions: SuggestedChange[]) => {
+    if (selectedText && selection && selection.blocks.length > 0) {
+      if (!artifact) {
+        console.error("Artifact not found");
+        return;
+      }
+
+      const currentBlockIdx = artifact.currentIndex;
+      const currentContent = artifact.contents.find(
+        (c) => c.index === currentBlockIdx
+      );
+      if (!currentContent) {
+        console.error("Current content not found");
+        return;
+      }
+      if (!isArtifactMarkdownContent(currentContent)) {
+        return;
+      }
+
+      (async () => {
+        try {
+          const [markdownBlock, fullMarkdown] = await Promise.all([
+            editor.blocksToMarkdownLossy(selection.blocks),
+            editor.blocksToMarkdownLossy(editor.document),
+          ]);
+          setSelectedBlocks({
+            fullMarkdown: cleanText(fullMarkdown),
+            markdownBlock: cleanText(markdownBlock),
+            selectedText: cleanText(selectedText),
+          });
+        } catch (e) {
+          console.error("Error processing selection to markdown:", e);
+        }
+      })();
+    } else if (!selectedText && !editor.getSelectedText()) {
+      setSelectedBlocks(undefined);
+    }
+  }, [editor.getSelectedText(), artifact, setSelectedBlocks, editor]);
+
+  useEffect(() => {
+    if (!props.isInputVisible) {
+      setSelectedBlocks(undefined);
+    }
+  }, [props.isInputVisible, setSelectedBlocks]);
+
+  useEffect(() => {
+    if (!artifact) {
+      editor.replaceBlocks(editor.document, []);
+      setUpdateRenderedArtifactRequired(false);
+      return;
+    }
+
+    const currentFocusedContent = artifact.contents.find(
+      (c) => c.index === artifact.currentIndex && c.type === "text"
+    ) as ArtifactMarkdownV3 | undefined;
+
+    if (!currentFocusedContent) {
+      editor.replaceBlocks(editor.document, []);
+      setUpdateRenderedArtifactRequired(false);
+      return;
+    }
+    const markdownToLoad = cleanText(currentFocusedContent.fullMarkdown);
+
+    if (isStreaming || updateRenderedArtifactRequired) {
+      (async () => {
+        setManuallyUpdatingArtifact(true);
+        try {
+          const currentEditorMarkdown = await editor.blocksToMarkdownLossy(editor.document);
+          if (cleanText(currentEditorMarkdown) !== markdownToLoad || updateRenderedArtifactRequired) {
+            const markdownAsBlocks = await editor.tryParseMarkdownToBlocks(markdownToLoad);
+            editor.replaceBlocks(editor.document, markdownAsBlocks);
+          }
+        } catch (e) {
+          console.error("Error updating editor from artifact stream/update:", e);
+          try {
+            const markdownAsBlocks = await editor.tryParseMarkdownToBlocks(markdownToLoad);
+            editor.replaceBlocks(editor.document, markdownAsBlocks);
+          } catch (finalE) {
+            console.error("Final fallback error loading to editor:", finalE);
+          }
+        } finally {
+          setManuallyUpdatingArtifact(false);
+          if (updateRenderedArtifactRequired) {
+            setUpdateRenderedArtifactRequired(false);
+          }
+        }
+      })();
+    } else if (props.isEditing && editor.document.length === 0 && !manuallyUpdatingArtifact && !isStreaming) {
+      (async () => {
+        setManuallyUpdatingArtifact(true);
+        try {
+          const markdownAsBlocks = await editor.tryParseMarkdownToBlocks(markdownToLoad);
+          editor.replaceBlocks(editor.document, markdownAsBlocks);
+        } catch (e) {
+          console.error("Error on initial load for editing:", e);
+        } finally {
+          setManuallyUpdatingArtifact(false);
+        }
+      })();
+    } else if (!props.isEditing && !isRawView) {
+      (async () => {
+        try {
+          const currentEditorMarkdown = await editor.blocksToMarkdownLossy(editor.document);
+          if (cleanText(currentEditorMarkdown) !== markdownToLoad) {
+            const markdownAsBlocks = await editor.tryParseMarkdownToBlocks(markdownToLoad);
+            editor.replaceBlocks(editor.document, markdownAsBlocks);
+          }
+        } catch (e) {
+          console.error("Error syncing non-visible editor to artifact", e);
+        }
+      })();
+    }
+  }, [
+    artifact,
+    isStreaming,
+    updateRenderedArtifactRequired,
+    props.isEditing,
+    editor,
+    setUpdateRenderedArtifactRequired,
+    isRawView
+  ]);
+
+  useEffect(() => {
+    if (isRawView) {
+      editor.blocksToMarkdownLossy(editor.document).then(md => setRawMarkdown(cleanText(md)));
+    } else if (!isRawView && rawMarkdown && artifact) {
+      const currentFocusedContent = artifact.contents.find(
+        (c) => c.index === artifact.currentIndex && c.type === "text"
+      ) as ArtifactMarkdownV3 | undefined;
+
+      if (currentFocusedContent && cleanText(rawMarkdown) !== cleanText(currentFocusedContent.fullMarkdown)) {
+        try {
+          (async () => {
+            setManuallyUpdatingArtifact(true);
+            const markdownAsBlocks =
+              await editor.tryParseMarkdownToBlocks(rawMarkdown);
+            editor.replaceBlocks(editor.document, markdownAsBlocks);
+            setArtifact((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                contents: prev.contents.map((c) =>
+                  c.index === prev.currentIndex && isArtifactMarkdownContent(c)
+                    ? { ...c, fullMarkdown: rawMarkdown }
+                    : c
+                ),
+              };
+            });
+            setManuallyUpdatingArtifact(false);
+          })();
+        } catch (_) {
+          console.error("Error parsing markdown from raw view to update editor", _);
+          setManuallyUpdatingArtifact(false);
+        }
+      }
+    }
+  }, [isRawView, rawMarkdown, editor, artifact, setArtifact]);
+
+  const isComposition = useRef(false);
+
+  const onChange = async () => {
+    if (
+      isStreaming ||
+      manuallyUpdatingArtifact ||
+      updateRenderedArtifactRequired ||
+      isComposition.current
+    )
+      return;
+
+    const fullMarkdown = await editor.blocksToMarkdownLossy(editor.document);
+    const cleanedMarkdown = cleanText(fullMarkdown);
+
+    setArtifact((prev) => {
+      if (!prev) {
+        console.warn("Attempted to update non-existent artifact from TextRenderer onChange");
+        return {
+          currentIndex: 1,
+          contents: [
+            { index: 1, fullMarkdown: cleanedMarkdown, title: "Untitled", type: "text" },
+          ],
+        };
+      }
+      
+      const currentContent = prev.contents.find(c => c.index === prev.currentIndex);
+      if (currentContent && isArtifactMarkdownContent(currentContent) && cleanText(currentContent.fullMarkdown) === cleanedMarkdown) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        contents: prev.contents.map((c) => {
+          if (c.index === prev.currentIndex) {
+            if (isArtifactMarkdownContent(c)) {
+              return { ...c, fullMarkdown: cleanedMarkdown };
+            }
+            return { index: c.index, fullMarkdown: cleanedMarkdown, title: c.title || "Untitled", type: "text" };
+          }
+          return c;
+        }),
+      };
+    });
+  };
+
+  const onChangeRawMarkdown = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newRawMarkdownValue = e.target.value;
+    setRawMarkdown(newRawMarkdownValue);
+  };
+  
+  const artifactTextContentForDisplay = (() => {
+    if (!artifact) return "";
+    const currentContent = artifact.contents.find(c => c.index === artifact.currentIndex);
+    if (isArtifactMarkdownContent(currentContent)) {
+      return currentContent.fullMarkdown;
+    }
+    return "";
+  })();
+
+  const processContentWithSuggestions = (text: string, suggestions: SuggestedChange[] = []) => {
     let processedText = text;
-    
     const sortedSuggestions = [...suggestions].sort((a, b) => {
       const posA = processedText.indexOf(a.prevText);
       const posB = processedText.indexOf(b.prevText);
@@ -119,105 +318,153 @@ export const TextRenderer: React.FC<TextRendererProps> = ({
 
     for (let i = sortedSuggestions.length - 1; i >= 0; i--) {
       const suggestion = sortedSuggestions[i];
-      const originalIndex = suggestions.findIndex(s => s === suggestion);
+      const originalIndex = props.suggestedChanges?.findIndex(s => s === suggestion) ?? -1;
       const { prevText, suggestedText } = suggestion;
       const index = processedText.indexOf(prevText);
       
-      if (index !== -1) {
+      if (index !== -1 && originalIndex !== -1) {
         const prevTextId = `suggestion-prev-${originalIndex}`;
-        // Removed direct border wrapping from here
         const replacement = `<span class="text-black line-through decoration-blue-500 decoration-2" data-prevtext-id="${prevTextId}">${prevText}</span>` +
                             `<span class="text-blue-700 ml-1">${suggestedText}</span>`;
-        
-        processedText = processedText.substring(0, index) + 
-                       replacement + 
-                       processedText.substring(index + prevText.length);
+        processedText = processedText.substring(0, index) + replacement + processedText.substring(index + prevText.length);
       }
     }
     return processedText;
   };
+  
+  const processedContent = processContentWithSuggestions(artifactTextContentForDisplay, props.suggestedChanges);
 
-  const processedContent = processContentWithSuggestions(content, suggestedChanges);
-
-  // Calculate highlight box style (for ReactMarkdown view)
   useEffect(() => {
-    if (isEditing || !containerRef.current) { // Don't calculate if editing
-      setHighlightBoxStyle(null);
+    if (props.isEditing || isRawView || !containerRef.current || !props.suggestedChanges || props.suggestedChanges.length === 0) {
+      setAllHighlightBoxStyles([]);
       return;
     }
 
     const container = containerRef.current;
+    const newStyles: React.CSSProperties[] = [];
 
-    if (selectedSuggestionIndex === null || selectedSuggestionIndex === undefined) {
-      setHighlightBoxStyle(null);
-      return;
-    }
+    props.suggestedChanges.forEach((_suggestion, index) => {
+      const prevTextElement = container.querySelector(`[data-prevtext-id="suggestion-prev-${index}"]`) as HTMLElement;
+      if (prevTextElement && prevTextElement.nextElementSibling) {
+        const suggestedTextElement = prevTextElement.nextElementSibling as HTMLElement;
+        const containerRect = container.getBoundingClientRect();
+        const prevRect = prevTextElement.getBoundingClientRect();
+        const suggestedRect = suggestedTextElement.getBoundingClientRect();
+        const actualTop = Math.min(prevRect.top, suggestedRect.top);
+        const actualLeft = Math.min(prevRect.left, suggestedRect.left);
+        const top = actualTop - containerRect.top + container.scrollTop;
+        const left = actualLeft - containerRect.left + container.scrollLeft;
+        const rightMostPoint = Math.max(prevRect.right, suggestedRect.right);
+        const width = rightMostPoint - actualLeft;
+        const bottomMostPoint = Math.max(prevRect.bottom, suggestedRect.bottom);
+        const height = bottomMostPoint - actualTop;
+        newStyles[index] = {
+          position: "absolute",
+          top: `${top - 20}px`,
+          left: `${left - 2}px`,
+          width: `${width + 4}px`,
+          height: `${height + 4}px`,
+          border: index === props.selectedSuggestionIndex ? "2px solid #3B82F6" : "2px solid transparent",
+          borderRadius: "4px",
+          pointerEvents: "auto",
+          cursor: "pointer",
+          zIndex: 1,
+        };
+      } else {
+        newStyles[index] = {};
+      }
+    });
+    setAllHighlightBoxStyles(newStyles);
 
-    const prevTextElement = container.querySelector(`[data-prevtext-id="suggestion-prev-${selectedSuggestionIndex}"]`) as HTMLElement;
-    
-    if (prevTextElement && prevTextElement.nextElementSibling) {
-      const suggestedTextElement = prevTextElement.nextElementSibling as HTMLElement;
-      const containerRect = container.getBoundingClientRect();
-      const prevRect = prevTextElement.getBoundingClientRect();
-      const suggestedRect = suggestedTextElement.getBoundingClientRect();
+  }, [props.suggestedChanges, processedContent, props.isEditing, isRawView, props.selectedSuggestionIndex, containerRef.current]);
 
-      // Determine the true top and left considering both elements
-      const actualTop = Math.min(prevRect.top, suggestedRect.top);
-      const actualLeft = Math.min(prevRect.left, suggestedRect.left);
-
-      const top = actualTop - containerRect.top + container.scrollTop;
-      const left = actualLeft - containerRect.left + container.scrollLeft;
-      
-      // Ensure right edge considers both elements if they wrap differently
-      const rightMostPoint = Math.max(prevRect.right, suggestedRect.right);
-      // Width is the difference between the rightmost and leftmost points of the combined elements
-      const width = rightMostPoint - actualLeft;
-      
-      // Ensure bottom edge considers both elements
-      const bottomMostPoint = Math.max(prevRect.bottom, suggestedRect.bottom);
-      // Height is the difference between the bottommost and topmost points
-      const height = bottomMostPoint - actualTop;
-
-      setHighlightBoxStyle({
-        position: "absolute",
-        top: `${top - 2}px`, 
-        left: `${left - 2}px`, 
-        width: `${width + 4}px`, 
-        height: `${height + 4}px`, 
-        border: "2px solid #3B82F6", 
-        borderRadius: "4px",
-        pointerEvents: "none", 
-        zIndex: 1, 
-      });
-    } else {
-      setHighlightBoxStyle(null);
-    }
-  }, [selectedSuggestionIndex, processedContent, isEditing]); // Added isEditing dependency
+  const contentObjectForCopyText = artifact?.contents.find(c => c.index === artifact.currentIndex);
+  
+  const blockNoteEditable = props.isEditing && !isStreaming && !manuallyUpdatingArtifact;
 
   return (
-    <div
-      ref={containerRef}
-      className={cn(
-        "prose prose-sm max-w-none p-4 relative",
-        isEditing ? "cursor-text" : "cursor-default",
-        isEditing ? "bn-editor-override" : "" // Add a class for potential BlockNote specific styling overrides
+    <div ref={containerRef} className="w-full h-full mt-2 flex flex-col border-t-[1px] border-gray-200 overflow-y-auto py-5 relative">
+      {props.isHovering && artifact && (
+        <div className="absolute flex gap-2 top-2 right-4 z-10" style={{ paddingTop: '12px', paddingRight: '12px'}}>
+          <CopyText currentArtifactContent={contentObjectForCopyText} />
+          <ViewRawText isRawView={isRawView} setIsRawView={setIsRawView} />
+        </div>
       )}
-    >
-      {isEditing ? (
-        <BlockNoteView
-          editor={editor}
-          theme="light" // Or "dark" or a custom theme object
+
+      {isRawView ? (
+        <Textarea
+          className="whitespace-pre-wrap font-mono text-sm px-[54px] py-5 border-0 shadow-none h-full outline-none ring-0 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0"
+          value={rawMarkdown}
+          onChange={onChangeRawMarkdown}
+          disabled={!props.isEditing || isStreaming}
         />
-      ) : (
+      ) : props.isEditing ? (
         <>
+          <style jsx global>{`
+            .pulse-text .bn-block-group {
+              animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            }
+            @keyframes pulse {
+              0%,
+              100% {
+                opacity: 1;
+              }
+              50% {
+                opacity: 0.3;
+              }
+            }
+            .bn-editor-override .bn-editor {
+              padding-left: 24px;
+              padding-right: 54px;
+              padding-top: 20px;
+              padding-bottom: 20px;
+            }
+          `}</style>
+          <BlockNoteView
+            theme="light"
+            formattingToolbar={false}
+            slashMenu={false}
+            onCompositionStartCapture={() => (isComposition.current = true)}
+            onCompositionEndCapture={() => {
+              isComposition.current = false;
+              onChange();
+            }}
+            onChange={onChange}
+            editable={blockNoteEditable}
+            editor={editor}
+            className={cn(
+              isStreaming && !firstTokenReceived ? "pulse-text" : "",
+              "custom-blocknote-theme flex-grow"
+            )}
+          >
+            <SuggestionMenuController
+              getItems={async (query) =>
+                getDefaultReactSlashMenuItems(editor).filter(
+                  (z) => z.group !== "Media" && (z.title.toLowerCase().includes(query.toLowerCase()) || z.aliases?.some(a => a.toLowerCase().includes(query.toLowerCase())))
+                )
+              }
+              triggerCharacter={"/"}
+            />
+          </BlockNoteView>
+        </>
+      ) : (
+        <div className="prose prose-sm max-w-none p-4 py-5 px-[54px] relative">
           <ReactMarkdown rehypePlugins={[rehypeRaw]}>
             {processedContent}
           </ReactMarkdown>
-          {highlightBoxStyle && <div style={highlightBoxStyle} />}
-        </>
+          {!props.isEditing && !isRawView && allHighlightBoxStyles.map((style, index) => (
+            (Object.keys(style).length > 0 && props.onSuggestionHighlightClick) && (
+              <div 
+                key={`highlight-${index}`}
+                style={style} 
+                onClick={() => props.onSuggestionHighlightClick && props.onSuggestionHighlightClick(index)}
+              />
+            )
+          ))}
+        </div>
       )}
     </div>
   );
-};
+}
 
-export const TextRendererComponent = React.memo(TextRenderer);
+export const TextRenderer = React.memo(TextRendererComponent);

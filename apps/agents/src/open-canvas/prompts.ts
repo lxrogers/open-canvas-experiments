@@ -387,6 +387,7 @@ export const BOARD_REWRITE_DETAILS_PROMPT = `
 
 export const SUGGEST_CHANGES_PROMPT = `You are an AI who is tasked with suggesting changes to the following artifact.
 Suggestions include the text which you are proposing to change, a description of the change, and the suggested new text.
+Only include the specific part of the sentence that is different, not the entire sentence or phrase.
 Limit the suggestions to 2-4 at a time.
 
 Here is the current content of the artifact:

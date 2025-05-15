@@ -39,9 +39,10 @@ interface SelectionBox {
   text: string;
 }
 
-const CARD_SPACING = 6; // Spacing between cards (reduced from 20)
+const CARD_SPACING = 12; // Spacing between cards (increased from 6, previously 20)
 const CARD_BASE_HEIGHT_ESTIMATE = 70; // Estimate for unselected card height (p-3, h3, etc.)
-const CARD_DETAILS_HEIGHT_ESTIMATE = 150; // Estimate for expanded details
+const CARD_DETAILS_HEIGHT_ESTIMATE = 200; // Estimate for expanded details
+const EXTRA_PADDING_FOR_MEASURED_CARD = 12; // Extra padding to add to a card's height once measured
 
 interface SuggestionCardProps {
   suggestion: SuggestedChange;
@@ -200,6 +201,8 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
   const [cardYPositions, setCardYPositions] = useState<number[]>([]);
   const cardRefs = useRef<React.RefObject<HTMLDivElement>[]>([]); 
 
+  const [showSuggestionsView, setShowSuggestionsView] = useState(false);
+
   const currentArtifactContent = artifact
   ? (getArtifactContent(artifact) as
       | ArtifactMarkdownV3
@@ -217,9 +220,79 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
     }
   }, [currentArtifactContent?.suggestedChanges, cardYPositions.length]);
 
+  // Update showSuggestionsView based on presence of suggestions
+  useEffect(() => {
+    if (currentArtifactContent?.suggestedChanges && currentArtifactContent.suggestedChanges.length > 0) {
+      setShowSuggestionsView(true);
+    } else {
+      setShowSuggestionsView(false);
+    }
+  }, [currentArtifactContent?.suggestedChanges]);
+
+  // Function to toggle the suggestions view/panel
+  const handleToggleSuggestionsView = () => {
+    setShowSuggestionsView(prev => !prev);
+    if (showSuggestionsView) { // If it was true and is now becoming false (closing panel)
+        setSelectedSuggestionIndex(null); // Also deselect any active suggestion
+    }
+    // If opening and suggestions exist, TextRenderer will become read-only due to isEditing prop change.
+    // If closing, TextRenderer will use props.isEditing.
+  };
+
+  // Function to apply a suggestion
+  const handleApplySuggestion = useCallback((suggestionToApply: SuggestedChange) => {
+    if (!artifact || !currentArtifactContent || currentArtifactContent.type !== 'text') {
+      return;
+    }
+
+    const textContent = currentArtifactContent as ArtifactMarkdownV3;
+    const currentMarkdown = textContent.fullMarkdown;
+
+    // Replace only the first occurrence of prevText.
+    // This assumes prevText is unique enough for the first match to be the correct one.
+    const newMarkdown = currentMarkdown.replace(
+      suggestionToApply.prevText,
+      `~~${suggestionToApply.prevText}~~ ${suggestionToApply.suggestedText}`
+    );
+
+    if (newMarkdown === currentMarkdown) {
+      console.warn("Suggestion application did not change markdown. prevText not found or identical after styling?", suggestionToApply.prevText);
+      // Proceed to update suggestedChanges even if markdown didn't change, to remove the suggestion
+    }
+
+    setArtifact(prevArtifact => {
+      if (!prevArtifact) return prevArtifact;
+      return {
+        ...prevArtifact,
+        contents: prevArtifact.contents.map(content => {
+          if (content.index === currentArtifactContent.index && content.type === 'text') {
+            return {
+              ...content,
+              fullMarkdown: newMarkdown,
+              suggestedChanges: content.suggestedChanges?.filter(
+                s => s.prevText !== suggestionToApply.prevText || s.suggestedText !== suggestionToApply.suggestedText
+              ),
+            };
+          }
+          return content;
+        }),
+      };
+    });
+    props.setIsEditing(true); // Ensure editor is active to see the change
+    setSelectedSuggestionIndex(null); // Deselect after applying
+  }, [artifact, currentArtifactContent, setArtifact, props.setIsEditing]);
+
   const handleSelectSuggestion = useCallback((index: number | null) => {
-    setSelectedSuggestionIndex(prevIndex => (prevIndex === index ? null : index));
-  }, []);
+    if (index !== null && index === selectedSuggestionIndex) { // Clicked an already selected card
+      const suggestionToApply = currentArtifactContent?.suggestedChanges?.[index];
+      if (suggestionToApply) {
+        handleApplySuggestion(suggestionToApply);
+      }
+      // setSelectedSuggestionIndex(null); // Already handled in handleApplySuggestion
+    } else {
+      setSelectedSuggestionIndex(index);
+    }
+  }, [selectedSuggestionIndex, currentArtifactContent, handleApplySuggestion]);
 
   useEffect(() => {
     if (!artifactContentRef.current || !suggestionCardsContainerRef.current || !currentArtifactContent?.suggestedChanges) {
@@ -252,10 +325,12 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
         }
         
         const cardElement = cardRefs.current[index]?.current;
-        const currentHeight = cardElement?.offsetHeight || 
-                              (index === selectedSuggestionIndex 
-                                ? CARD_BASE_HEIGHT_ESTIMATE + CARD_DETAILS_HEIGHT_ESTIMATE 
-                                : CARD_BASE_HEIGHT_ESTIMATE);
+        const currentHeight = 
+          cardElement?.offsetHeight 
+            ? cardElement.offsetHeight + EXTRA_PADDING_FOR_MEASURED_CARD // Add extra padding to measured height
+            : (index === selectedSuggestionIndex 
+                ? CARD_BASE_HEIGHT_ESTIMATE + CARD_DETAILS_HEIGHT_ESTIMATE 
+                : CARD_BASE_HEIGHT_ESTIMATE);
         cardData.push({ index, yDesired: desiredY, height: currentHeight });
       });
 
@@ -420,6 +495,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
     };
 
     await streamMessage(streamMessageParams);
+    props.setIsEditing(true);
   };
 
   const handleSuggestChangesToggle = useCallback((enabled: boolean) => {
@@ -621,11 +697,20 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
         <div
           ref={artifactContentRef}
           className={cn(
-            "flex-1 flex justify-center overflow-y-auto relative",
+            "flex-1 flex justify-center overflow-y-auto relative transition-all duration-300 ease-in-out",
+            showSuggestionsView ? "w-[calc(100%-24rem)]" : "w-[calc(100%-2.5rem)]",
             currentArtifactContent.type === "code" ? "pt-[10px]" : ""
           )}
         >
-          <div className={cn("relative", currentArtifactContent.type === "code" ? "w-full" : "max-w-4xl mx-auto w-full")}>
+          <div 
+            className={cn(
+              "relative w-full h-full", // Apply w-full and h-full universally here
+              // Max-width and centering should only apply if NOT text OR if panel is closed and we want centering for wide screens
+              // For text content, let TextRenderer's internal padding define content width within this full-width container.
+              // The centering `mx-auto` was for the whole block, TextRenderer itself isn't meant to be narrow then centered.
+              currentArtifactContent.type !== "text" ? "max-w-4xl mx-auto" : "" 
+            )}
+          >
             <div
               className="h-full"
               onMouseEnter={() => setIsHoveringOverArtifact(true)}
@@ -634,11 +719,11 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
               {currentArtifactContent.type === "text" ? (
                 <TextRenderer
                   isInputVisible={isInputVisible}
-                  isEditing={props.isEditing}
+                  isEditing={showSuggestionsView ? false : props.isEditing}
                   isHovering={isHoveringOverArtifact}
-                  content={currentArtifactContent.fullMarkdown}
                   suggestedChanges={currentArtifactContent.suggestedChanges}
                   selectedSuggestionIndex={selectedSuggestionIndex}
+                  onSuggestionHighlightClick={handleSelectSuggestion}
                 />
               ) : null}
               {currentArtifactContent.type === "code" ? (
@@ -676,15 +761,44 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
             />
           )}
         </div>
-        <div className="flex-shrink-0 w-80 h-full bg-gray-50 border-l border-gray-200"> 
-          <SuggestionCards 
-            suggestions={currentArtifactContent.suggestedChanges} 
-            selectedSuggestionIndex={selectedSuggestionIndex}
-            onSelectSuggestion={handleSelectSuggestion}
-            containerRef={suggestionCardsContainerRef} 
-            cardYPositions={cardYPositions}
-            cardRefs={cardRefs.current}
-          />
+        {/* Suggestions Panel - Conditionally rendered and with a toggle button */}
+        <div 
+          className={cn(
+            "flex-shrink-0 bg-gray-50 border-l border-gray-200 relative transition-all duration-300 ease-in-out z-10", 
+            showSuggestionsView ? "w-96" : "w-10" 
+          )}
+        >
+          <button 
+            onClick={handleToggleSuggestionsView} 
+            // Ensure button has a high enough z-index within its stacking context (created by transform or parent z-index)
+            className="absolute top-2 -left-3 z-20 p-1 bg-gray-300 rounded-full hover:bg-gray-400 text-gray-700 transform shadow-md"
+            aria-label={showSuggestionsView ? "Hide suggestions" : "Show suggestions"}
+          >
+            {showSuggestionsView ? (
+              // ChevronRight when panel is OPEN (suggests collapsing to the right)
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /> 
+              </svg>
+            ) : (
+              // ChevronLeft when panel is CLOSED (suggests expanding to the left)
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+              </svg>
+            )}
+          </button>
+          {showSuggestionsView && (
+            // Inner div for content, with overflow-hidden
+            <div className="w-full h-full overflow-hidden">
+              <SuggestionCards 
+                suggestions={currentArtifactContent.suggestedChanges} 
+                selectedSuggestionIndex={selectedSuggestionIndex}
+                onSelectSuggestion={handleSelectSuggestion}
+                containerRef={suggestionCardsContainerRef} 
+                cardYPositions={cardYPositions}
+                cardRefs={cardRefs.current}
+              />
+            </div>
+          )}
         </div>
       </div>
       <CustomQuickActions
