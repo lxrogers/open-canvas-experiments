@@ -6,6 +6,7 @@ import { TighterText } from "../ui/header";
 import { NotebookPen, StickyNote } from "lucide-react";
 import { ProgrammingLanguagesDropdown } from "../ui/programming-lang-dropdown";
 import { Button } from "../ui/button";
+import WritingAssistantCard from "./WritingAssistantCard";
 
 const QUICK_START_PROMPTS_SEARCH = [
   "Write a market analysis of AI chip manufacturers in 2025",
@@ -154,6 +155,7 @@ export const ThreadWelcome: FC<ThreadWelcomeProps> = (
             What would you like to write today?
           </TighterText>
           <div className="mt-8 w-full">
+            <WritingAssistantCard onClick={() => alert('Coming soon!')} />
             <QuickStartButtons
               composer={props.composer}
               handleQuickStart={props.handleQuickStart}
