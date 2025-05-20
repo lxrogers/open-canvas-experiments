@@ -403,5 +403,7 @@ Rules and guidelines:
 {"description": "Add a metaphor", "prevText": "The text you are proposing to change", "suggestedText": "The suggested new text"}
 - Do not include any other text before or after the JSON.
 - Only include the words that are changed, not the entire sentence or phrase.
+- try to make suggestions to different parts of the a This is just in the accept change function, either. rtifact, not just the beginning.
 - Each line should be a separate suggestion, delineated by a new-line. Don't make it an array.
+- Make sure the prevtext has the same casing as the original text.
 </rules-guidelines>`;

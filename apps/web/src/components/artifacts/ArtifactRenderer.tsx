@@ -51,6 +51,8 @@ interface SuggestionCardProps {
   onSelectSuggestion: (index: number | null) => void;
   yPosition: number;
   cardRef: React.RefObject<HTMLDivElement>;
+  onAcceptSuggestion: (suggestion: SuggestedChange) => void;
+  onRejectSuggestion: (suggestion: SuggestedChange) => void;
 }
 
 const SuggestionCard: React.FC<SuggestionCardProps> = ({
@@ -60,6 +62,8 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({
   onSelectSuggestion,
   yPosition,
   cardRef,
+  onAcceptSuggestion,
+  onRejectSuggestion,
 }) => {
   return (
     <motion.div
@@ -121,6 +125,21 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({
                 </pre>
               </div>
             </div>
+            {/* Action buttons for the selected card */}
+            <div className="mt-3 pt-3 border-t border-gray-200 flex justify-end space-x-2">
+              <button 
+                onClick={() => onRejectSuggestion(suggestion)} 
+                className="px-3 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-500"
+              >
+                Reject Change
+              </button>
+              <button 
+                onClick={() => onAcceptSuggestion(suggestion)}
+                className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500"
+              >
+                Accept Change
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -135,7 +154,9 @@ const SuggestionCards: React.FC<{
   containerRef: React.RefObject<HTMLDivElement>;
   cardYPositions: number[];
   cardRefs: React.RefObject<HTMLDivElement>[];
-}> = ({ suggestions, selectedSuggestionIndex, onSelectSuggestion, containerRef, cardYPositions, cardRefs }) => {
+  onAcceptSuggestion: (suggestion: SuggestedChange) => void;
+  onRejectSuggestion: (suggestion: SuggestedChange) => void;
+}> = ({ suggestions, selectedSuggestionIndex, onSelectSuggestion, containerRef, cardYPositions, cardRefs, onAcceptSuggestion, onRejectSuggestion }) => {
   if (!suggestions || suggestions.length === 0) {
     return null;
   }
@@ -155,6 +176,8 @@ const SuggestionCards: React.FC<{
             onSelectSuggestion={onSelectSuggestion}
             yPosition={cardYPositions[index] === undefined ? index * (CARD_BASE_HEIGHT_ESTIMATE + CARD_SPACING) : cardYPositions[index]} // Fallback if not calculated yet
             cardRef={cardRefs[index]}
+            onAcceptSuggestion={onAcceptSuggestion}
+            onRejectSuggestion={onRejectSuggestion}
           />
         ))}
       </AnimatePresence>
@@ -239,25 +262,28 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
     // If closing, TextRenderer will use props.isEditing.
   };
 
-  // Function to apply a suggestion
-  const handleApplySuggestion = useCallback((suggestionToApply: SuggestedChange) => {
+  // Restore handleAcceptSuggestion to its direct update logic
+  const handleAcceptSuggestion = useCallback((suggestionToAccept: SuggestedChange) => {
     if (!artifact || !currentArtifactContent || currentArtifactContent.type !== 'text') {
+      console.error("[handleAcceptSuggestion] Cannot accept suggestion: Invalid artifact state.");
       return;
     }
-
     const textContent = currentArtifactContent as ArtifactMarkdownV3;
     const currentMarkdown = textContent.fullMarkdown;
 
-    // Replace only the first occurrence of prevText.
-    // This assumes prevText is unique enough for the first match to be the correct one.
-    const newMarkdown = currentMarkdown.replace(
-      suggestionToApply.prevText,
-      `~~${suggestionToApply.prevText}~~ ${suggestionToApply.suggestedText}`
-    );
+    // Escape prevText for use in a regular expression
+    const escapedPrevText = suggestionToAccept.prevText.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
+    // Create a case-insensitive regex for the first occurrence of prevText
+    const prevTextRegex = new RegExp(escapedPrevText, 'i');
 
-    if (newMarkdown === currentMarkdown) {
-      console.warn("Suggestion application did not change markdown. prevText not found or identical after styling?", suggestionToApply.prevText);
-      // Proceed to update suggestedChanges even if markdown didn't change, to remove the suggestion
+    const newMarkdown = currentMarkdown.replace(prevTextRegex, suggestionToAccept.suggestedText);
+
+    if (newMarkdown === currentMarkdown && currentMarkdown.toLowerCase().includes(suggestionToAccept.prevText.toLowerCase())) {
+      // This condition checks if a match should have occurred but didn't alter the string,
+      // which might happen if suggestedText is identical to the found prevText considering casing.
+      console.warn("Accepting suggestion did not change markdown, but a case-insensitive match for prevText was found. suggestedText might be identical to the found instance of prevText.", suggestionToAccept);
+    } else if (newMarkdown === currentMarkdown) {
+      console.warn("Accepting suggestion did not change markdown. Case-insensitive prevText may not have been found:", suggestionToAccept.prevText);
     }
 
     setArtifact(prevArtifact => {
@@ -270,7 +296,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
               ...content,
               fullMarkdown: newMarkdown,
               suggestedChanges: content.suggestedChanges?.filter(
-                s => s.prevText !== suggestionToApply.prevText || s.suggestedText !== suggestionToApply.suggestedText
+                s => s.prevText !== suggestionToAccept.prevText || s.suggestedText !== suggestionToAccept.suggestedText
               ),
             };
           }
@@ -278,21 +304,47 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
         }),
       };
     });
-    props.setIsEditing(true); // Ensure editor is active to see the change
-    setSelectedSuggestionIndex(null); // Deselect after applying
+    props.setIsEditing(true);
+    setSelectedSuggestionIndex(null);
   }, [artifact, currentArtifactContent, setArtifact, props.setIsEditing]);
 
+  const handleRejectSuggestion = useCallback((suggestionToReject: SuggestedChange) => {
+    if (!artifact || !currentArtifactContent || currentArtifactContent.type !== 'text') {
+      console.error("Cannot reject suggestion: Invalid artifact state or not a text artifact.");
+      return;
+    }
+    console.log("Rejecting suggestion (actual removal from list not implemented yet):", suggestionToReject);
+    // Implementation would be similar to handleAcceptSuggestion for filtering the list
+    setArtifact(prevArtifact => {
+      if (!prevArtifact) return prevArtifact;
+      return {
+        ...prevArtifact,
+        contents: prevArtifact.contents.map(content => {
+          if (content.index === currentArtifactContent.index && content.type === 'text') {
+            return {
+              ...content,
+              suggestedChanges: content.suggestedChanges?.filter(
+                s => s.prevText !== suggestionToReject.prevText || s.suggestedText !== suggestionToReject.suggestedText
+              ),
+            };
+          }
+          return content;
+        }),
+      };
+    });
+    setSelectedSuggestionIndex(null); // Deselect the card
+  }, [artifact, currentArtifactContent, setArtifact]);
+
   const handleSelectSuggestion = useCallback((index: number | null) => {
-    if (index !== null && index === selectedSuggestionIndex) { // Clicked an already selected card
+    if (index !== null && index === selectedSuggestionIndex) { 
       const suggestionToApply = currentArtifactContent?.suggestedChanges?.[index];
       if (suggestionToApply) {
-        handleApplySuggestion(suggestionToApply);
+        handleAcceptSuggestion(suggestionToApply); // Reverted: call direct update, no index
       }
-      // setSelectedSuggestionIndex(null); // Already handled in handleApplySuggestion
     } else {
       setSelectedSuggestionIndex(index);
     }
-  }, [selectedSuggestionIndex, currentArtifactContent, handleApplySuggestion]);
+  }, [selectedSuggestionIndex, currentArtifactContent, handleAcceptSuggestion]);
 
   useEffect(() => {
     if (!artifactContentRef.current || !suggestionCardsContainerRef.current || !currentArtifactContent?.suggestedChanges) {
@@ -796,6 +848,8 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
                 containerRef={suggestionCardsContainerRef} 
                 cardYPositions={cardYPositions}
                 cardRefs={cardRefs.current}
+                onAcceptSuggestion={handleAcceptSuggestion}
+                onRejectSuggestion={handleRejectSuggestion}
               />
             </div>
           )}

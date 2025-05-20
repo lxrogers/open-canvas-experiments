@@ -136,7 +136,7 @@ export function TextRendererComponent(props: TextRendererProps) {
   useEffect(() => {
     if (!artifact) {
       editor.replaceBlocks(editor.document, []);
-      setUpdateRenderedArtifactRequired(false);
+      if (updateRenderedArtifactRequired) setUpdateRenderedArtifactRequired(false);
       return;
     }
 
@@ -146,7 +146,7 @@ export function TextRendererComponent(props: TextRendererProps) {
 
     if (!currentFocusedContent) {
       editor.replaceBlocks(editor.document, []);
-      setUpdateRenderedArtifactRequired(false);
+      if (updateRenderedArtifactRequired) setUpdateRenderedArtifactRequired(false);
       return;
     }
     const markdownToLoad = cleanText(currentFocusedContent.fullMarkdown);
@@ -161,13 +161,11 @@ export function TextRendererComponent(props: TextRendererProps) {
             editor.replaceBlocks(editor.document, markdownAsBlocks);
           }
         } catch (e) {
-          console.error("Error updating editor from artifact stream/update:", e);
+          console.error("TextRenderer: Error updating editor from artifact stream/update:", e);
           try {
             const markdownAsBlocks = await editor.tryParseMarkdownToBlocks(markdownToLoad);
             editor.replaceBlocks(editor.document, markdownAsBlocks);
-          } catch (finalE) {
-            console.error("Final fallback error loading to editor:", finalE);
-          }
+          } catch (finalE) { console.error("TextRenderer: Final fallback error during stream/update:", finalE); }
         } finally {
           setManuallyUpdatingArtifact(false);
           if (updateRenderedArtifactRequired) {
@@ -175,20 +173,9 @@ export function TextRendererComponent(props: TextRendererProps) {
           }
         }
       })();
-    } else if (props.isEditing && editor.document.length === 0 && !manuallyUpdatingArtifact && !isStreaming) {
+    } else if (props.isEditing) {
       (async () => {
-        setManuallyUpdatingArtifact(true);
-        try {
-          const markdownAsBlocks = await editor.tryParseMarkdownToBlocks(markdownToLoad);
-          editor.replaceBlocks(editor.document, markdownAsBlocks);
-        } catch (e) {
-          console.error("Error on initial load for editing:", e);
-        } finally {
-          setManuallyUpdatingArtifact(false);
-        }
-      })();
-    } else if (!props.isEditing && !isRawView) {
-      (async () => {
+        setManuallyUpdatingArtifact(true); 
         try {
           const currentEditorMarkdown = await editor.blocksToMarkdownLossy(editor.document);
           if (cleanText(currentEditorMarkdown) !== markdownToLoad) {
@@ -196,18 +183,41 @@ export function TextRendererComponent(props: TextRendererProps) {
             editor.replaceBlocks(editor.document, markdownAsBlocks);
           }
         } catch (e) {
-          console.error("Error syncing non-visible editor to artifact", e);
+          console.error("TextRenderer: Error reloading editor in editing mode:", e);
+          try {
+            const markdownAsBlocks = await editor.tryParseMarkdownToBlocks(markdownToLoad);
+            editor.replaceBlocks(editor.document, markdownAsBlocks);
+          } catch (finalE) { console.error("TextRenderer: Final fallback error in editing mode sync:", finalE); }
+        } finally {
+          setManuallyUpdatingArtifact(false);
         }
       })();
+    } else if (!props.isEditing && !isRawView) {
+      if (!manuallyUpdatingArtifact) {
+        (async () => {
+          try {
+            const currentEditorMarkdown = await editor.blocksToMarkdownLossy(editor.document);
+            if (cleanText(currentEditorMarkdown) !== markdownToLoad) {
+              const markdownAsBlocks = await editor.tryParseMarkdownToBlocks(markdownToLoad);
+              editor.replaceBlocks(editor.document, markdownAsBlocks);
+            }
+          } catch (e) { /* console.error("TextRenderer: Error syncing non-visible editor", e) */ }
+        })();
+      }
     }
+
+    if (updateRenderedArtifactRequired) {
+        setUpdateRenderedArtifactRequired(false);
+    }
+
   }, [
     artifact,
     isStreaming,
     updateRenderedArtifactRequired,
-    props.isEditing,
+    props.isEditing, 
     editor,
     setUpdateRenderedArtifactRequired,
-    isRawView
+    isRawView 
   ]);
 
   useEffect(() => {
@@ -307,9 +317,10 @@ export function TextRendererComponent(props: TextRendererProps) {
 
   const processContentWithSuggestions = (text: string, suggestions: SuggestedChange[] = []) => {
     let processedText = text;
+
     const sortedSuggestions = [...suggestions].sort((a, b) => {
-      const posA = processedText.indexOf(a.prevText);
-      const posB = processedText.indexOf(b.prevText);
+      const posA = text.indexOf(a.prevText);
+      const posB = text.indexOf(b.prevText);
       if (posA === -1 && posB === -1) return 0;
       if (posA === -1) return 1;
       if (posB === -1) return -1;
@@ -318,15 +329,21 @@ export function TextRendererComponent(props: TextRendererProps) {
 
     for (let i = sortedSuggestions.length - 1; i >= 0; i--) {
       const suggestion = sortedSuggestions[i];
-      const originalIndex = props.suggestedChanges?.findIndex(s => s === suggestion) ?? -1;
-      const { prevText, suggestedText } = suggestion;
-      const index = processedText.indexOf(prevText);
+      const originalGlobalIndex = props.suggestedChanges?.findIndex(s => s === suggestion) ?? -1;
+
+      if (originalGlobalIndex === -1) continue;
+
+      const prevTextId = `suggestion-prev-${originalGlobalIndex}`;
+      let replacement = "";
+
+      replacement = `<span class="text-black line-through decoration-blue-500 decoration-2" data-prevtext-id="${prevTextId}">${suggestion.prevText}</span>` +
+                    `<span class="text-blue-700 ml-1">${suggestion.suggestedText}</span>`;
       
-      if (index !== -1 && originalIndex !== -1) {
-        const prevTextId = `suggestion-prev-${originalIndex}`;
-        const replacement = `<span class="text-black line-through decoration-blue-500 decoration-2" data-prevtext-id="${prevTextId}">${prevText}</span>` +
-                            `<span class="text-blue-700 ml-1">${suggestedText}</span>`;
-        processedText = processedText.substring(0, index) + replacement + processedText.substring(index + prevText.length);
+      const indexInProcessed = processedText.indexOf(suggestion.prevText);
+      if (indexInProcessed !== -1) {
+        processedText = processedText.substring(0, indexInProcessed) + 
+                         replacement + 
+                         processedText.substring(indexInProcessed + suggestion.prevText.length);
       }
     }
     return processedText;
@@ -393,7 +410,7 @@ export function TextRendererComponent(props: TextRendererProps) {
 
       {isRawView ? (
         <Textarea
-          className="whitespace-pre-wrap font-mono text-sm px-[54px] py-5 border-0 shadow-none h-full outline-none ring-0 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0"
+          className="whitespace-pre-wrap font-mono text-sm px-[54px] py-5 border-0 shadow-none h-full outline-none ring-0 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0 font-light leading-relaxed"
           value={rawMarkdown}
           onChange={onChangeRawMarkdown}
           disabled={!props.isEditing || isStreaming}
@@ -418,6 +435,10 @@ export function TextRendererComponent(props: TextRendererProps) {
               padding-right: 54px;
               padding-top: 20px;
               padding-bottom: 20px;
+            }
+            .bn-editor-override .bn-editor .bn-block-content {
+              line-height: 1.6;
+              font-weight: normal;
             }
           `}</style>
           <BlockNoteView
@@ -448,7 +469,7 @@ export function TextRendererComponent(props: TextRendererProps) {
           </BlockNoteView>
         </>
       ) : (
-        <div className="prose prose-sm max-w-none p-4 py-5 px-[54px] relative">
+        <div className="prose prose-sm max-w-none p-4 py-5 px-[54px] relative font-mono font-light leading-relaxed">
           <ReactMarkdown rehypePlugins={[rehypeRaw]}>
             {processedContent}
           </ReactMarkdown>
