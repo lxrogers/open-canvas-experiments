@@ -29,11 +29,13 @@ import {
 } from "@/components/ui/resizable";
 import { CHAT_COLLAPSED_QUERY_PARAM } from "@/constants";
 import { useRouter, useSearchParams } from "next/navigation";
+import { v4 as uuidv4 } from "uuid";
+import { HumanMessage } from "@langchain/core/messages";
 
 export function CanvasComponent() {
   const { graphData } = useGraphContext();
   const { setModelName, setModelConfig } = useThreadContext();
-  const { setArtifact, chatStarted, setChatStarted } = graphData;
+  const { setArtifact, chatStarted, setChatStarted, setMessages, streamMessage } = graphData;
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [webSearchResultsOpen, setWebSearchResultsOpen] = useState(false);
@@ -57,7 +59,12 @@ export function CanvasComponent() {
 
   const handleQuickStart = (
     type: "text" | "code" | "board",
-    language?: ProgrammingLanguageOptions
+    language?: ProgrammingLanguageOptions,
+    options?: {
+      sessionMode?: 'writingAssistant' | 'general' | string;
+      initialSystemPrompt?: string;
+      initialUserMessage?: string;
+    }
   ) => {
     if (type === "code" && !language) {
       toast({
@@ -97,10 +104,29 @@ export function CanvasComponent() {
     const newArtifact: ArtifactV3 = {
       currentIndex: 1,
       contents: [artifactContent],
+      sessionMode: options?.sessionMode || 'general',
+      isNew: true,
+      lastSaved: null,
     };
-    // Do not worry about existing items in state. This should
-    // never occur since this action can only be invoked if
-    // there are no messages/artifacts in the thread.
+
+    if (options?.sessionMode === 'writingAssistant') {
+      console.log("Writing Assistant mode selected. Ensure correct system prompt is used for the new thread.");
+    }
+
+    if (options?.initialUserMessage) {
+      const firstMessage = new HumanMessage({
+        content: options.initialUserMessage,
+        id: uuidv4(),
+      });
+      console.log("Initial user message for quick start:", options.initialUserMessage);
+      if (setMessages && streamMessage) {
+        setMessages((prevMessages: any) => [...prevMessages, firstMessage]);
+        streamMessage({ messages: [{ role: 'user', content: options.initialUserMessage }] });
+      } else {
+        console.warn("setMessages or streamMessage not available in handleQuickStart scope");
+      }
+    }
+    
     setArtifact(newArtifact);
     setIsEditing(true);
   };

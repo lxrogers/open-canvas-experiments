@@ -5,14 +5,12 @@ import {
   isArtifactMarkdownContent,
 } from "@opencanvas/shared/utils/artifacts";
 import {
-  ArtifactV3,
   Reflections,
 } from "@opencanvas/shared/types";
 import {
   createContextDocumentMessages,
   ensureStoreInConfig,
   formatReflections,
-  getModelConfig,
   getModelFromConfig,
 } from "../../utils.js";
 import { SUGGEST_CHANGES_PROMPT } from "../prompts.js";

@@ -15,7 +15,6 @@ import {
   RewriteArtifactMetaToolResponse,
   SearchResult,
   TextHighlight,
-  SuggestedChange,
 } from "@opencanvas/shared/types";
 import { AIMessage, BaseMessage } from "@langchain/core/messages";
 import { useRuns } from "@/hooks/useRuns";
@@ -79,6 +78,8 @@ interface GraphData {
   chatStarted: boolean;
   searchEnabled: boolean;
   shouldSuggestChanges: boolean;
+  isNoteTakerRunning: boolean;
+  noteTakerVersion: number;
   setShouldSuggestChanges: Dispatch<SetStateAction<boolean>>;
   setSearchEnabled: Dispatch<SetStateAction<boolean>>;
   setChatStarted: Dispatch<SetStateAction<boolean>>;
@@ -89,6 +90,7 @@ interface GraphData {
   setSelectedArtifact: (index: number) => void;
   setMessages: Dispatch<SetStateAction<BaseMessage[]>>;
   streamMessage: (params: GraphInput) => Promise<void>;
+  runNoteTaker: (messages: BaseMessage[], artifact?: ArtifactV3) => Promise<void>;
   setArtifactContent: (index: number, content: string) => void;
   clearState: () => void;
   switchSelectedThread: (thread: Thread) => void;
@@ -146,6 +148,8 @@ export function GraphProvider({ children }: { children: ReactNode }) {
   const [artifactUpdateFailed, setArtifactUpdateFailed] = useState(false);
   const [searchEnabled, setSearchEnabled] = useState(false);
   const [shouldSuggestChanges, setShouldSuggestChanges] = useState(false);
+  const [isNoteTakerRunning, setIsNoteTakerRunning] = useState(false);
+  const [noteTakerVersion, setNoteTakerVersion] = useState(0);
 
   const [_, setWebSearchResultsId] = useQueryState(
     WEB_SEARCH_RESULTS_QUERY_PARAM
@@ -1396,6 +1400,86 @@ export function GraphProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const runNoteTaker = async (messages: BaseMessage[], artifact?: ArtifactV3) => {
+    if (!assistantsData.selectedAssistant) {
+      console.error("No assistant ID found for NoteTaker");
+      return;
+    }
+
+    // Check if we have a thread ID - if not, we can't store thread-specific notes
+    if (!threadData.threadId) {
+      console.log("No thread ID available yet for NoteTaker");
+      return;
+    }
+
+    setIsNoteTakerRunning(true);
+    
+    try {
+      const client = createClient();
+      
+      // DON'T create a new thread - use the existing thread ID
+      // This ensures the agent can access the same store as the main conversation
+      
+      const noteTakerInput = {
+        messages,
+        artifact,
+      };
+      
+      const noteTakerConfig = {
+        configurable: {
+          // Pass the assistant ID and thread ID for memory storage
+          open_canvas_assistant_id: assistantsData.selectedAssistant.assistant_id,
+          thread_id: threadData.threadId,
+        },
+      };
+
+      // Create a note-taking run using the EXISTING thread
+      const run = await client.runs.create(
+        threadData.threadId, // Use the existing thread ID instead of creating a new one
+        "note-taker", // The name of the note-taker graph as registered in langgraph.json
+        {
+          input: noteTakerInput,
+          config: noteTakerConfig,
+          // Run immediately in the background
+          multitaskStrategy: "enqueue",
+          afterSeconds: 0, // Run immediately
+        }
+      );
+
+      console.log("NoteTaker agent started successfully with config:", noteTakerConfig);
+      
+      // Wait for the run to complete and get the result
+      const result = await client.runs.join(threadData.threadId, run.run_id);
+      console.log("NoteTaker run result:", result);
+      
+      // Get the final state to extract the notes
+      const finalState = await client.threads.getState(threadData.threadId);
+      console.log("NoteTaker final state:", finalState);
+      
+      // The notes should already be stored by the agent, but we can verify
+      // by checking if they're in the state
+      const notesFromState = (finalState?.values as any)?.notes;
+      if (notesFromState) {
+        console.log("Notes found in final state:", notesFromState);
+      }
+      
+      // Increment version to trigger refresh in UI
+      setNoteTakerVersion(prev => prev + 1);
+      console.log("NoteTaker agent completed, incrementing version");
+      
+    } catch (error) {
+      console.error("Error running NoteTaker agent:", error);
+      toast({
+        title: "Note Taking Error",
+        description: "Failed to run note taking agent",
+        variant: "destructive",
+        duration: 5000,
+      });
+    } finally {
+      setIsNoteTakerRunning(false);
+    }
+  };
+
   const setSelectedArtifact = (index: number) => {
     setUpdateRenderedArtifactRequired(true);
     setThreadSwitched(true);
@@ -1528,6 +1612,8 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       artifactUpdateFailed,
       searchEnabled,
       shouldSuggestChanges,
+      isNoteTakerRunning,
+      noteTakerVersion,
       setShouldSuggestChanges,
       setSearchEnabled,
       setChatStarted,
@@ -1538,6 +1624,7 @@ export function GraphProvider({ children }: { children: ReactNode }) {
       setSelectedArtifact,
       setMessages,
       streamMessage: streamMessageV2,
+      runNoteTaker,
       setArtifactContent,
       clearState,
       switchSelectedThread,

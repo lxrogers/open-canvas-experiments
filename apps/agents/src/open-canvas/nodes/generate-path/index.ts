@@ -27,7 +27,25 @@ export async function generatePath(
   state: typeof OpenCanvasGraphAnnotation.State,
   config: LangGraphRunnableConfig
 ): Promise<OpenCanvasGraphReturnType> {
-  const { _messages } = state;
+  const { _messages, artifact } = state;
+
+  // Check the latest message for isVoiceMessage flag
+  if (_messages && _messages.length > 0) {
+    const latestMessage = _messages[_messages.length - 1];
+    if (latestMessage.additional_kwargs && latestMessage.additional_kwargs.isVoiceMessage === true) {
+      console.log("VOICE MESSAGE DETECTED in generatePath. Routing to cleanState to bypass normal flow.");
+      // Future: if (artifact?.sessionMode === 'writingAssistant') { 
+      //   return { next: "invokeVoiceAgent", _messages: _messages, artifact: artifact }; 
+      // }
+      // For now, just end the main flow by going to 'cleanState'
+      return { 
+        next: "cleanState", 
+        _messages: _messages, // Pass along the messages state
+        artifact: artifact  // Pass along the artifact state
+      }; 
+    }
+  }
+
   const newMessages: BaseMessage[] = [];
   const docMessage = await convertContextDocumentToHumanMessage(
     _messages,

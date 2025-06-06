@@ -40,7 +40,12 @@ export interface ContentComposerChatInterfaceProps {
   hasChatStarted: boolean;
   handleQuickStart: (
     type: "text" | "code" | "board",
-    language?: ProgrammingLanguageOptions
+    language?: ProgrammingLanguageOptions,
+    options?: {
+      sessionMode?: 'writingAssistant' | 'general' | string;
+      initialSystemPrompt?: string;
+      initialUserMessage?: string;
+    }
   ) => void;
   chatCollapsed: boolean;
   setChatCollapsed: (c: boolean) => void;

@@ -10,7 +10,6 @@ import { BlockNoteView } from "@blocknote/shadcn";
 import "@blocknote/shadcn/style.css";
 import { isArtifactMarkdownContent } from "@opencanvas/shared/utils/artifacts";
 import { CopyText } from "./components/CopyText";
-import { getArtifactContent } from "@opencanvas/shared/utils/artifacts";
 import { useGraphContext } from "@/contexts/GraphContext";
 import React from "react";
 import { TooltipIconButton } from "../ui/assistant-ui/tooltip-icon-button";

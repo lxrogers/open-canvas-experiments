@@ -25,6 +25,7 @@ import { ArtifactHeader } from "./header";
 import { useUserContext } from "@/contexts/UserContext";
 import { useAssistantContext } from "@/contexts/AssistantContext";
 import { motion, AnimatePresence } from "framer-motion";
+import { AssistedTextRenderer } from './AssistedTextRenderer';
 
 export interface ArtifactRendererProps {
   isEditing: boolean;
@@ -200,7 +201,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
     setMessages,
     streamMessage,
     setSelectedBlocks,
-    shouldSuggestChanges,
+    shouldSuggestChanges: _shouldSuggestChanges,
     setShouldSuggestChanges,
   } = graphData;
   const editorRef = useRef<EditorView | null>(null);
@@ -233,6 +234,8 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
       | ArtifactBoardV3
       | undefined)
   : undefined;
+
+  const sessionMode = artifact?.sessionMode;
 
   useEffect(() => {
     const numSuggestions = currentArtifactContent?.suggestedChanges?.length || 0;
@@ -425,7 +428,7 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
         let accumulatedY = 0;
         for (let i = 0; i < cardData.length; i++) {
           const cardInfo = cardData[i];
-          let currentCardY = Math.max(cardInfo.yDesired, accumulatedY);
+          const currentCardY = Math.max(cardInfo.yDesired, accumulatedY);
           finalPositionsMap.set(cardInfo.index, currentCardY);
           accumulatedY = currentCardY + cardInfo.height + CARD_SPACING;
         }
@@ -769,14 +772,20 @@ function ArtifactRendererComponent(props: ArtifactRendererProps) {
               onMouseLeave={() => setIsHoveringOverArtifact(false)}
             >
               {currentArtifactContent.type === "text" ? (
-                <TextRenderer
-                  isInputVisible={isInputVisible}
-                  isEditing={showSuggestionsView ? false : props.isEditing}
-                  isHovering={isHoveringOverArtifact}
-                  suggestedChanges={currentArtifactContent.suggestedChanges}
-                  selectedSuggestionIndex={selectedSuggestionIndex}
-                  onSuggestionHighlightClick={handleSelectSuggestion}
-                />
+                sessionMode === 'writingAssistant' ? (
+                  <AssistedTextRenderer
+                    isEditing={showSuggestionsView ? false : props.isEditing}
+                  />
+                ) : (
+                  <TextRenderer
+                    isInputVisible={isInputVisible}
+                    isEditing={showSuggestionsView ? false : props.isEditing}
+                    isHovering={isHoveringOverArtifact}
+                    suggestedChanges={currentArtifactContent.suggestedChanges}
+                    selectedSuggestionIndex={selectedSuggestionIndex}
+                    onSuggestionHighlightClick={handleSelectSuggestion}
+                  />
+                )
               ) : null}
               {currentArtifactContent.type === "code" ? (
                 <CodeRenderer

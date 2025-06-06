@@ -140,8 +140,14 @@ export interface SuggestedChange {
 }
 
 export interface ArtifactV3 {
+  id?: string;
+  assistantId?: string;
+  title?: string;
   currentIndex: number;
   contents: Array<ArtifactCodeV3 | ArtifactMarkdownV3 | ArtifactBoardV3>;
+  sessionMode?: 'writingAssistant' | 'general' | string;
+  lastSaved?: number | null;
+  isNew?: boolean;
 }
 
 export interface TextHighlight {

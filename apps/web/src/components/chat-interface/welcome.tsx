@@ -45,7 +45,12 @@ function getRandomPrompts(prompts: string[], count: number = 4): string[] {
 interface QuickStartButtonsProps {
   handleQuickStart: (
     type: "text" | "code" | "board",
-    language?: ProgrammingLanguageOptions
+    language?: ProgrammingLanguageOptions,
+    options?: {
+      sessionMode?: 'writingAssistant' | 'general' | string;
+      initialSystemPrompt?: string;
+      initialUserMessage?: string;
+    }
   ) => void;
   composer: React.ReactNode;
   searchEnabled: boolean;
@@ -95,7 +100,7 @@ const QuickStartPrompts = ({ searchEnabled }: QuickStartPromptsProps) => {
 
 const QuickStartButtons = (props: QuickStartButtonsProps) => {
   const handleLanguageSubmit = (language: ProgrammingLanguageOptions) => {
-    props.handleQuickStart("code", language);
+    props.handleQuickStart("code", language, { sessionMode: 'general' });
   };
 
   return (
@@ -106,7 +111,7 @@ const QuickStartButtons = (props: QuickStartButtonsProps) => {
           <Button
             variant="outline"
             className="text-gray-500 hover:text-gray-700 transition-colors ease-in rounded-2xl flex items-center justify-center gap-2 w-[250px] h-[64px]"
-            onClick={() => props.handleQuickStart("text")}
+            onClick={() => props.handleQuickStart("text", undefined, { sessionMode: 'general' })}
           >
             New Markdown
             <NotebookPen />
@@ -114,7 +119,7 @@ const QuickStartButtons = (props: QuickStartButtonsProps) => {
           <Button
             variant="outline"
             className="text-gray-500 hover:text-gray-700 transition-colors ease-in rounded-2xl flex items-center justify-center gap-2 w-[250px] h-[64px]"
-            onClick={() => props.handleQuickStart("board")}
+            onClick={() => props.handleQuickStart("board", undefined, { sessionMode: 'general' })}
           >
             New Board
             <StickyNote />
@@ -134,7 +139,12 @@ const QuickStartButtons = (props: QuickStartButtonsProps) => {
 interface ThreadWelcomeProps {
   handleQuickStart: (
     type: "text" | "code" | "board",
-    language?: ProgrammingLanguageOptions
+    language?: ProgrammingLanguageOptions,
+    options?: {
+      sessionMode?: 'writingAssistant' | 'general' | string;
+      initialSystemPrompt?: string;
+      initialUserMessage?: string;
+    }
   ) => void;
   composer: React.ReactNode;
   searchEnabled: boolean;
@@ -143,6 +153,16 @@ interface ThreadWelcomeProps {
 export const ThreadWelcome: FC<ThreadWelcomeProps> = (
   props: ThreadWelcomeProps
 ) => {
+  const handleWritingAssistantClick = () => {
+    props.handleQuickStart(
+      "text",
+      undefined,
+      {
+        sessionMode: 'writingAssistant',
+      }
+    );
+  };
+
   return (
     <ThreadPrimitive.Empty>
       <div className="flex items-center justify-center mt-16 w-full">
@@ -155,7 +175,7 @@ export const ThreadWelcome: FC<ThreadWelcomeProps> = (
             What would you like to write today?
           </TighterText>
           <div className="mt-8 w-full">
-            <WritingAssistantCard onClick={() => alert('Coming soon!')} />
+            <WritingAssistantCard onClick={handleWritingAssistantClick} />
             <QuickStartButtons
               composer={props.composer}
               handleQuickStart={props.handleQuickStart}

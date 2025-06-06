@@ -4,7 +4,7 @@ import { ProgrammingLanguageOptions } from "@opencanvas/shared/types";
 import { ThreadPrimitive } from "@assistant-ui/react";
 import { Thread as ThreadType } from "@langchain/langgraph-sdk";
 import { ArrowDownIcon, PanelRightOpen, SquarePen } from "lucide-react";
-import { Dispatch, FC, SetStateAction } from "react";
+import { Dispatch, FC, SetStateAction, useState } from "react";
 import { ReflectionsDialog } from "../reflections-dialog/ReflectionsDialog";
 import { useLangSmithLinkToolUI } from "../tool-hooks/LangSmithLinkToolUI";
 import { TooltipIconButton } from "../ui/assistant-ui/tooltip-icon-button";
@@ -17,6 +17,11 @@ import { ThreadWelcome } from "./welcome";
 import { useUserContext } from "@/contexts/UserContext";
 import { useThreadContext } from "@/contexts/ThreadProvider";
 import { useAssistantContext } from "@/contexts/AssistantContext";
+import { Button } from "@/components/ui/button";
+import { getNextMessage, convertToLangChainMessage, VoiceMessage } from "@/lib/test-voice-messages";
+import { BaseMessage } from "@langchain/core/messages";
+import { convertToOpenAIFormat } from "@/lib/convert_messages";
+import { GraphInput } from "@opencanvas/shared/types";
 
 const ThreadScrollToBottom: FC = () => {
   return (
@@ -37,7 +42,12 @@ export interface ThreadProps {
   hasChatStarted: boolean;
   handleQuickStart: (
     type: "text" | "code" | "board",
-    language?: ProgrammingLanguageOptions
+    language?: ProgrammingLanguageOptions,
+    options?: {
+      sessionMode?: 'writingAssistant' | 'general' | string;
+      initialSystemPrompt?: string;
+      initialUserMessage?: string;
+    }
   ) => void;
   setChatStarted: Dispatch<SetStateAction<boolean>>;
   switchSelectedThreadCallback: (thread: ThreadType) => void;
@@ -54,7 +64,7 @@ export const Thread: FC<ThreadProps> = (props: ThreadProps) => {
   } = props;
   const { toast } = useToast();
   const {
-    graphData: { clearState, runId, feedbackSubmitted, setFeedbackSubmitted },
+    graphData: { clearState, runId, feedbackSubmitted, setFeedbackSubmitted, messages, setMessages, streamMessage, artifact, runNoteTaker },
   } = useGraphContext();
   const { selectedAssistant } = useAssistantContext();
   const {
@@ -64,8 +74,13 @@ export const Thread: FC<ThreadProps> = (props: ThreadProps) => {
     setModelConfig,
     modelConfigs,
     setThreadId,
+    threadId,
+    createThread,
   } = useThreadContext();
   const { user } = useUserContext();
+
+  // State for tracking the current test message index
+  const [currentTestMessageIndex, setCurrentTestMessageIndex] = useState(-1);
 
   // Render the LangSmith trace link
   useLangSmithLinkToolUI();
@@ -88,6 +103,63 @@ export const Thread: FC<ThreadProps> = (props: ThreadProps) => {
     setModelConfig(modelName, modelConfig);
     clearState();
     setChatStarted(false);
+    setCurrentTestMessageIndex(-1); // Reset test message index on new session
+  };
+
+  const handleAddTestMessage = async () => {
+    const nextMessageFromFile = getNextMessage(currentTestMessageIndex);
+    if (nextMessageFromFile) {
+      const langChainFormattedMessage = convertToLangChainMessage(nextMessageFromFile);
+      
+      console.log("Adding test message (no streaming):", langChainFormattedMessage);
+      console.log("Current threadId:", threadId, "hasChatStarted:", hasChatStarted);
+
+      // Create a thread if one doesn't exist yet
+      if (!threadId) {
+        console.log("Creating thread for test messages...");
+        const newThread = await createThread();
+        if (!newThread) {
+          toast({
+            title: "Error",
+            description: "Failed to create thread for test messages",
+            variant: "destructive",
+            duration: 5000,
+          });
+          return;
+        }
+        console.log("Thread created:", newThread.thread_id);
+      }
+
+      if (setMessages) { 
+        // Update messages first
+        setMessages((prevMessages: BaseMessage[]) => [...prevMessages, langChainFormattedMessage]);
+        
+        // Only run the NoteTaker agent if this is a human message
+        if (nextMessageFromFile.speaker === "user") {
+          // Run the NoteTaker agent with the current messages plus the new one
+          // This happens outside the state setter to avoid multiple calls
+          const currentMessagesWithNew = [...messages, langChainFormattedMessage];
+          runNoteTaker(currentMessagesWithNew, artifact).catch((error) => {
+            console.error("Failed to run NoteTaker agent:", error);
+          });
+        } else {
+          console.log("Skipping NoteTaker for AI message");
+        }
+        
+        if (!hasChatStarted) {
+          setChatStarted(true);
+        }
+      } else {
+        console.error("setMessages function is not available from GraphContext.");
+        return;
+      }
+      
+      setCurrentTestMessageIndex(prevIndex => prevIndex + 1);
+    } else {
+      console.log("No more test messages available.");
+      // Optionally reset the index if you want to loop or stop
+      // setCurrentTestMessageIndex(-1); 
+    }
   };
 
   return (
@@ -180,6 +252,15 @@ export const Thread: FC<ThreadProps> = (props: ThreadProps) => {
                 userId={props.userId}
                 searchEnabled={props.searchEnabled}
               />
+              <div className="mt-2 flex justify-center">
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddTestMessage}
+                >
+                  Add Test Messages (Dev)
+                </Button>
+              </div>
             </div>
           )}
         </div>
